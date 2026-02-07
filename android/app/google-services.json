@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1040970406800",
+    "project_id": "washfamily-001",
+    "storage_bucket": "washfamily-001.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1040970406800:android:65d417b6e77f15e43e7115",
+        "android_client_info": {
+          "package_name": "com.washfamily.washfamily"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyANdBlT_ElDcmSmbUQ5npvZL8dyuO3TgIE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
