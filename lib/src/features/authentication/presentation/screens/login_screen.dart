@@ -60,7 +60,7 @@ class LoginScreen extends StatelessWidget {
 
                     OutlinedButton(
                       onPressed: () {
-                        print('Google login clicked');
+                        debugPrint('Google login clicked');
                         context.push('/profile-setup');
                       },
                       child: Row(

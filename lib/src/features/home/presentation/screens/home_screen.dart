@@ -34,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // 1. Vérifie si le GPS est allumé
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      print("Le GPS est éteint.");
+      debugPrint("Le GPS est éteint.");
       return;
     }
 
@@ -44,19 +44,19 @@ class _HomeScreenState extends State<HomeScreen> {
       // Demande la permission
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        print("Permission refusée");
+        debugPrint("Permission refusée");
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      print("Permission refusée définitivement");
+      debugPrint("Permission refusée définitivement");
       return;
     }
 
     // 3. On a la permission ! On récupère la position
     final position = await Geolocator.getCurrentPosition();
-    print("📍 Position trouvée : ${position.latitude}, ${position.longitude}");
+    debugPrint("📍 Position trouvée : ${position.latitude}, ${position.longitude}");
 
     // 4. On déplace la caméra
     final GoogleMapController controller = await _controller.future;
@@ -102,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderRadius: BorderRadius.circular(32),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 15,
                     offset: const Offset(0, 4),
                   ),
@@ -112,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(32),
-                  onTap: () { print("Recherche"); },
+                   onTap: () { debugPrint("Recherche"); },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
@@ -179,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: NavigationBar(
           backgroundColor: Colors.white,
           elevation: 0,
-          indicatorColor: theme.primaryColor.withOpacity(0.1),
+          indicatorColor: theme.primaryColor.withValues(alpha: 0.1),
           selectedIndex: 0,
           destinations: const [
             NavigationDestination(

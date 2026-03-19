@@ -69,6 +69,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1040970406800',
     projectId: 'washfamily-001',
     storageBucket: 'washfamily-001.firebasestorage.app',
+    iosClientId: '1040970406800-p14omfi7307r5jptmd7tuds50qv6csio.apps.googleusercontent.com',
     iosBundleId: 'com.washfamily.washfamily',
   );
+
 }

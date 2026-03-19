@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:washfamily/src/features/authentication/data/services/auth_service.dart';
 
 class PhoneLoginScreen extends StatefulWidget {
   const PhoneLoginScreen({super.key});
@@ -12,6 +13,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   // Contrôleur pour récupérer ce que l'utilisateur tape
   final TextEditingController _phoneController = TextEditingController();
   bool _isButtonEnabled = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -118,16 +120,59 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: _isButtonEnabled
+                      onPressed: (_isButtonEnabled && !_isLoading)
                           ? () {
-                              final number = "+33 ${_phoneController.text}";
-                              context.push('/otp', extra: number);
+                              // 1. On lance le chargement
+                              setState(() {
+                                _isLoading = true;
+                              });
+
+                              // 2. On formate le numéro (ex: +33612345678)
+                              final number =
+                                  "+33${_phoneController.text.trim()}";
+
+                              // 3. On appelle le service
+                              AuthService().verifyPhoneNumber(
+                                phoneNumber: number,
+                                onCodeSent: () {
+                                  // Succès : Le SMS est parti !
+                                  setState(() {
+                                    _isLoading = false;
+                                  });
+                                  context.push(
+                                    '/otp',
+                                    extra: number,
+                                  ); // On passe à la suite
+                                },
+                                onError: (error) {
+                                  // Échec : Mauvais numéro, quota dépassé...
+                                  setState(() {
+                                    _isLoading = false;
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(error),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                },
+                              );
                             }
                           : null,
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
-                      child: const Text("Envoyer le code"),
+                      // Affiche un loader si _isLoading est vrai, sinon le texte
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text("Envoyer le code"),
                     ),
                   ),
 

@@ -12,7 +12,12 @@
           "package_name": "com.washfamily.washfamily"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1040970406800-7lrn7f86m2j2de0aa4o6t7k6aqm5cath.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyANdBlT_ElDcmSmbUQ5npvZL8dyuO3TgIE"
@@ -20,7 +25,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1040970406800-7lrn7f86m2j2de0aa4o6t7k6aqm5cath.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1040970406800-p14omfi7307r5jptmd7tuds50qv6csio.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.washfamily.washfamily"
+              }
+            }
+          ]
         }
       }
     }

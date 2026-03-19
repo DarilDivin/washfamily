@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:pinput/pinput.dart'; // N'oublie pas l'import !
+import 'package:pinput/pinput.dart';
+import 'package:washfamily/src/features/authentication/data/services/auth_service.dart'; // N'oublie pas l'import !
 
-class OtpScreen extends StatelessWidget {
+class OtpScreen extends StatefulWidget {
   final String destination;
 
   const OtpScreen({super.key, required this.destination});
+
+  @override
+  State<OtpScreen> createState() => _OtpScreenState();
+}
+
+class _OtpScreenState extends State<OtpScreen> {
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +79,7 @@ class OtpScreen extends StatelessWidget {
 
               // Sous-titre avec le numéro (fictif pour l'instant)
               Text(
-                'Nous avons envoyé un code à \n$destination',
+                'Nous avons envoyé un code à \n${widget.destination}',
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: Colors.grey[600],
                 ),
@@ -83,21 +91,34 @@ class OtpScreen extends StatelessWidget {
               // --- LE WIDGET PINPUT ---
               Center(
                 child: Pinput(
-                  length: 4, // Code à 4 chiffres
+                  length:
+                      6, // ⚠️ Attention : Firebase envoie des codes à 6 chiffres ! (Change ton 4 en 6)
                   defaultPinTheme: defaultPinTheme,
                   focusedPinTheme: focusedPinTheme,
                   submittedPinTheme: submittedPinTheme,
-                  // Validateur (Simulation)
-                  validator: (s) {
-                    return s == '2222' ? null : 'Code incorrect';
-                  },
-                  pinputAutovalidateMode: PinputAutovalidateMode.onSubmit,
                   showCursor: true,
-                  onCompleted: (pin) {
-                    print('Code entré : $pin');
-                    // Si le code est bon, on passe à la suite
-                    if (pin == '2222') {
-                      context.push('/profile-setup');
+                  onCompleted: (pin) async {
+                    setState(() => _isLoading = true);
+
+                    // 1. On interroge Firebase
+                    final isSuccess = await AuthService().verifyOTP(pin);
+
+                    setState(() => _isLoading = false);
+
+                    // 2. On vérifie le résultat
+                    if (isSuccess) {
+                      print("Authentification réussie !");
+                      if (mounted) context.go('/profile-setup'); // Connexion validée
+                    } else {
+                      // Afficher une erreur visuelle
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Code incorrect ou expiré."),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
                     }
                   },
                 ),
@@ -115,7 +136,7 @@ class OtpScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {
-                      print("Renvoyer le code");
+                      debugPrint("Renvoyer le code");
                     },
                     child: const Text("Renvoyer"),
                   ),
