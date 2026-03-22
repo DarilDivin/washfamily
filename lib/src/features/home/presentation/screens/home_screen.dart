@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../../../machines_map/domain/models/machine_model.dart';
+import '../../../machines_map/data/repositories/firestore_machine_repository.dart';
+import '../widgets/nearby_machines_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,8 +15,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final Completer<GoogleMapController> _controller = Completer();
+  final FirestoreMachineRepository _machineRepository = FirestoreMachineRepository();
 
-  // Position par défaut (Paris) au cas où le GPS est coupé
+  Set<Marker> _markers = {};
+  List<MachineModel> _machines = [];
+  double? _userLat;
+  double? _userLng;
+
   static const CameraPosition _defaultPosition = CameraPosition(
     target: LatLng(48.8566, 2.3522),
     zoom: 14.4746,
@@ -22,52 +30,67 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // On peut lancer la demande ici, ou après le chargement de la map
     _checkPermissionsAndLocate();
   }
 
-  // --- 📍 LOGIQUE GPS ---
   Future<void> _checkPermissionsAndLocate() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
 
-    // 1. Vérifie si le GPS est allumé
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      debugPrint("Le GPS est éteint.");
-      return;
-    }
-
-    // 2. Vérifie la permission
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      // Demande la permission
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        debugPrint("Permission refusée");
-        return;
-      }
+      if (permission == LocationPermission.denied) return;
     }
+    if (permission == LocationPermission.deniedForever) return;
 
-    if (permission == LocationPermission.deniedForever) {
-      debugPrint("Permission refusée définitivement");
-      return;
-    }
-
-    // 3. On a la permission ! On récupère la position
     final position = await Geolocator.getCurrentPosition();
-    debugPrint("📍 Position trouvée : ${position.latitude}, ${position.longitude}");
 
-    // 4. On déplace la caméra
+    if (mounted) {
+      setState(() {
+        _userLat = position.latitude;
+        _userLng = position.longitude;
+      });
+    }
+
     final GoogleMapController controller = await _controller.future;
     controller.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: LatLng(position.latitude, position.longitude),
-          zoom: 15, // Zoom assez proche pour voir les rues
+          zoom: 15,
         ),
       ),
     );
+
+    await _loadMachines(position.latitude, position.longitude);
+  }
+
+  Future<void> _loadMachines(double lat, double lng) async {
+    try {
+      final machines = await _machineRepository.getAllMachines();
+
+      final newMarkers = machines.map((machine) {
+        return Marker(
+          markerId: MarkerId(machine.id),
+          position: LatLng(machine.latitude, machine.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            machine.status == 'AVAILABLE'
+                ? BitmapDescriptor.hueBlue
+                : BitmapDescriptor.hueRed,
+          ),
+        );
+      }).toSet();
+
+      if (mounted) {
+        setState(() {
+          _machines = machines;
+          _markers = newMarkers;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erreur chargement machines: $e');
+    }
   }
 
   @override
@@ -78,19 +101,34 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          // ── Couche 1 : Google Map ───────────────────────────────
           GoogleMap(
             mapType: MapType.normal,
             initialCameraPosition: _defaultPosition,
-            // 👇 C'est ça qui affiche le point bleu natif
-            myLocationEnabled: true, 
-            myLocationButtonEnabled: false, // On cache le bouton moche par défaut
+            markers: _markers,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
+            padding: const EdgeInsets.only(bottom: 280), // Espace pour le sheet
             onMapCreated: (GoogleMapController controller) {
-              _controller.complete(controller);
+              if (!_controller.isCompleted) {
+                _controller.complete(controller);
+              }
+              _loadMachines(
+                _defaultPosition.target.latitude,
+                _defaultPosition.target.longitude,
+              );
             },
           ),
 
-          // BARRE DE RECHERCHE (Code inchangé)
+          // ── Couche 2 : BottomSheet ancré ───────────────────────
+          NearbyMachinesSheet(
+            machines: _machines,
+            userLat: _userLat,
+            userLng: _userLng,
+          ),
+
+          // ── Couche 3 : Barre de recherche (au-dessus du sheet) ──
           Positioned(
             top: topPadding + 16,
             left: 20,
@@ -112,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(32),
-                   onTap: () { debugPrint("Recherche"); },
+                  onTap: () {},
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
@@ -155,50 +193,20 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          
-          // BOUTON RECENTRER (Optionnel mais pratique)
+
+          // ── Couche 4 : Bouton recentrer ─────────────────────────
           Positioned(
-            bottom: 100, // Au-dessus de la barre de nav
+            bottom: 320, // Au-dessus du sheet mi-hauteur
             right: 20,
-            child: FloatingActionButton(
-              mini: true,
+            child: FloatingActionButton.small(
               backgroundColor: Colors.white,
               foregroundColor: theme.primaryColor,
-              onPressed: _checkPermissionsAndLocate, // Relance la localisation
+              elevation: 4,
+              onPressed: _checkPermissionsAndLocate,
               child: const Icon(Icons.my_location),
             ),
           ),
         ],
-      ),
-      
-      // BOTTOM NAV (Code inchangé, purement visuel pour l'instant)
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: Colors.grey[200]!, width: 1)),
-        ),
-        child: NavigationBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          indicatorColor: theme.primaryColor.withValues(alpha: 0.1),
-          selectedIndex: 0,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.map_outlined),
-              selectedIcon: Icon(Icons.map),
-              label: 'Explorer',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.calendar_today_outlined),
-              selectedIcon: Icon(Icons.calendar_today),
-              label: 'Réservations',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Profil',
-            ),
-          ],
-        ),
       ),
     );
   }

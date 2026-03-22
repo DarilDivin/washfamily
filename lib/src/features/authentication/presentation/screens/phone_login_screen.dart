@@ -10,7 +10,6 @@ class PhoneLoginScreen extends StatefulWidget {
 }
 
 class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
-  // Contrôleur pour récupérer ce que l'utilisateur tape
   final TextEditingController _phoneController = TextEditingController();
   bool _isButtonEnabled = false;
   bool _isLoading = false;
@@ -18,7 +17,6 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   @override
   void initState() {
     super.initState();
-    // On écoute le changement de texte pour activer le bouton seulement si on a 9 chiffres
     _phoneController.addListener(() {
       setState(() {
         _isButtonEnabled = _phoneController.text.length >= 9;
@@ -31,157 +29,186 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      // Le resizeToAvoidBottomInset est true par défaut, c'est ce qui fait remonter l'écran
-      resizeToAvoidBottomInset: true,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.close, color: theme.colorScheme.onSurface),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      // 👇 LA SOLUTION MAGIQUE : CustomScrollView
-      body: CustomScrollView(
-        slivers: [
-          SliverFillRemaining(
-            hasScrollBody: false, // Important pour que le Spacer fonctionne
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Quel est votre numéro ?",
-                    style: theme.textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "Nous vous enverrons un code pour vérifier votre compte.",
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: Colors.grey,
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // --- CHAMP TÉLÉPHONE ---
-                  Container(
-                    padding: const EdgeInsets.only(
-                      left: 16,
-                      right: 4,
-                      top: 4,
-                      bottom: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          "🇫🇷 +33",
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Container(
-                          height: 24,
-                          width: 1,
-                          color: Colors.grey[300],
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _phoneController,
-                            autofocus: true,
-                            keyboardType: TextInputType.phone,
-                            style: theme.textTheme.titleMedium?.copyWith(),
-                            decoration: const InputDecoration(
-                              hintText: "6 12 34 56 78",
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // 👇 Ce Spacer va pousser le bouton en bas quand il y a de la place
-                  // et rétrécir à 0 quand le clavier est là.
-                  const Spacer(),
-
-                  // --- BOUTON D'ACTION ---
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: (_isButtonEnabled && !_isLoading)
-                          ? () {
-                              // 1. On lance le chargement
-                              setState(() {
-                                _isLoading = true;
-                              });
-
-                              // 2. On formate le numéro (ex: +33612345678)
-                              final number =
-                                  "+33${_phoneController.text.trim()}";
-
-                              // 3. On appelle le service
-                              AuthService().verifyPhoneNumber(
-                                phoneNumber: number,
-                                onCodeSent: () {
-                                  // Succès : Le SMS est parti !
-                                  setState(() {
-                                    _isLoading = false;
-                                  });
-                                  context.push(
-                                    '/otp',
-                                    extra: number,
-                                  ); // On passe à la suite
-                                },
-                                onError: (error) {
-                                  // Échec : Mauvais numéro, quota dépassé...
-                                  setState(() {
-                                    _isLoading = false;
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(error),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                },
-                              );
-                            }
-                          : null,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      // Affiche un loader si _isLoading est vrai, sinon le texte
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text("Envoyer le code"),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-                ],
-              ),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0),
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: IconButton(
+              icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface, size: 20),
+              onPressed: () => context.pop(),
             ),
           ),
-        ],
+        ),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 40.0, bottom: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Quel est votre\nnuméro?",
+                style: theme.textTheme.headlineLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                "Nous vous enverrons un code par SMS pour vérifier votre identité.",
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: const Color(0xFF475569),
+                  height: 1.5,
+                ),
+              ),
+
+              const SizedBox(height: 48),
+
+              // --- CHAMP TÉLÉPHONE PREMIUM ---
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      "🇫🇷  +33",
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF475569),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextField(
+                        controller: _phoneController,
+                        autofocus: true,
+                        keyboardType: TextInputType.phone,
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                        decoration: InputDecoration(
+                          hintText: "6 12 34 56 78",
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Info block
+              Row(
+                children: [
+                  Container(
+                    width: 8, height: 8,
+                    decoration: BoxDecoration(color: theme.primaryColor, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "DONNÉES SÉCURISÉES ET CRYPTÉES",
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 0.5),
+                  )
+                ],
+              ),
+
+              const Spacer(),
+
+              // --- BOUTON D'ACTION ---
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: (_isButtonEnabled && !_isLoading)
+                      ? () {
+                          setState(() => _isLoading = true);
+                          final number = "+33${_phoneController.text.trim()}";
+
+                          AuthService().verifyPhoneNumber(
+                            phoneNumber: number,
+                            onCodeSent: () {
+                              setState(() => _isLoading = false);
+                              context.push('/otp', extra: number); 
+                            },
+                            onError: (error) {
+                              setState(() => _isLoading = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(error), backgroundColor: Colors.red),
+                              );
+                            },
+                          );
+                        }
+                      : null,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    backgroundColor: _isButtonEnabled ? theme.primaryColor : const Color(0xFFE2E8F0),
+                    foregroundColor: _isButtonEnabled ? Colors.white : Colors.grey[500],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text("Envoyer le code", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                          SizedBox(width: 8),
+                          Icon(Icons.chevron_right, size: 20),
+                        ],
+                      ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+              
+              // Footer
+              Center(
+                child: Text(
+                  "En continuant, vous acceptez de recevoir un SMS. Des frais de\nmessage et de données peuvent s'appliquer.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Links
+              Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text("WashFamily", style: TextStyle(fontWeight: FontWeight.w800, color: theme.primaryColor)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text("Privacy Policy", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                    const SizedBox(width: 16),
+                    Text("Terms of Service", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                    const SizedBox(width: 16),
+                    Text("Legal", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -5,6 +5,20 @@ allprojects {
     }
 }
 
+val newBuildDir: Directory =
+    rootProject.layout.buildDirectory
+        .dir("../../build")
+        .get()
+rootProject.layout.buildDirectory.value(newBuildDir)
+
+subprojects {
+    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
+    val rootDrive = rootProject.projectDir.absolutePath.substringBefore(":\\")
+    val projectDrive = project.projectDir.absolutePath.substringBefore(":\\")
+    if (rootDrive.equals(projectDrive, ignoreCase = true)) {
+        project.layout.buildDirectory.value(newSubprojectBuildDir)
+    }
+}
 subprojects {
     project.evaluationDependsOn(":app")
 }

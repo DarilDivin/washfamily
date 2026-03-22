@@ -11,6 +11,22 @@ import '../features/authentication/presentation/screens/login_screen.dart';
 import '../features/authentication/presentation/screens/otp_screen.dart';
 import '../features/authentication/presentation/screens/profile_setup_screen.dart';
 import '../features/authentication/presentation/screens/register_screen.dart';
+import '../features/booking/presentation/screens/booking_date_screen.dart';
+import '../features/booking/presentation/screens/booking_summary_screen.dart';
+import '../features/booking/presentation/screens/bookings_screen.dart';
+import '../features/home/presentation/screens/main_scaffold.dart';
+import '../features/user_profile/presentation/screens/profile_screen.dart';
+import '../features/user_profile/presentation/screens/add_machine_screen.dart';
+import '../features/user_profile/presentation/screens/my_machines_screen.dart';
+import '../features/user_profile/presentation/screens/profile_subscreens.dart';
+import '../features/shop/presentation/screens/shop_screen.dart';
+import '../features/messages/presentation/screens/messages_screen.dart';
+import '../features/machines_map/domain/models/machine_model.dart';
+import '../dev/dev_seed_screen.dart';
+import '../features/machines_map/presentation/screens/machine_detail_screen.dart';
+import '../features/booking/presentation/screens/booking_success_screen.dart';
+import '../features/booking/presentation/screens/owner_bookings_screen.dart';
+import '../features/booking/domain/models/reservation_model.dart';
 
 part 'router_config.g.dart';
 
@@ -43,6 +59,45 @@ GoRouter router(RouterRef ref) {
     // },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
+      GoRoute(path: '/dev/seed', builder: (context, state) => const DevSeedScreen()),
+      GoRoute(
+        path: '/machine/:id',
+        builder: (context, state) {
+          final machine = state.extra as MachineModel;
+          return MachineDetailScreen(machine: machine);
+        },
+      ),
+      // ── Tunnel réservation ────────────────────────────────────────────
+      GoRoute(
+        path: '/bookings/new',
+        builder: (context, state) {
+          final machine = state.extra as MachineModel;
+          return BookingDateScreen(machine: machine);
+        },
+      ),
+      GoRoute(
+        path: '/bookings/summary',
+        builder: (context, state) {
+          final data = state.extra as Map<String, dynamic>;
+          return BookingSummaryScreen(
+            machine: data['machine'] as MachineModel,
+            startTime: data['startTime'] as DateTime,
+            endTime: data['endTime'] as DateTime,
+            price: data['price'] as double,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/bookings/success',
+        builder: (context, state) {
+          final reservation = state.extra as ReservationModel;
+          return BookingSuccessScreen(reservation: reservation);
+        },
+      ),
+      GoRoute(
+        path: '/profile/owner-bookings',
+        builder: (context, state) => const OwnerBookingsScreen(),
+      ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/login/phone',
@@ -69,7 +124,66 @@ GoRouter router(RouterRef ref) {
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
       ),
-      GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return MainScaffold(navigationShell: navigationShell);
+        },
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/shop',
+                builder: (context, state) => const ShopScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/bookings',
+                builder: (context, state) => const BookingsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/messages',
+                builder: (context, state) => const MessagesScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/profile',
+                builder: (context, state) => const ProfileScreen(),
+                routes: [
+                   GoRoute(path: 'my-machines', builder: (context, state) => const MyMachinesScreen()),
+                   GoRoute(path: 'add-machine', builder: (context, state) => const AddMachineScreen()),
+                   GoRoute(path: 'favorites', builder: (context, state) => const FavoritesScreen()),
+                   GoRoute(path: 'personal-info', builder: (context, state) => const PersonalInfoScreen()),
+                   GoRoute(path: 'payments', builder: (context, state) => const PaymentsScreen()),
+                   GoRoute(path: 'help', builder: (context, state) => const HelpCenterScreen()),
+                   GoRoute(path: 'security', builder: (context, state) => const SecurityReportScreen()),
+                   GoRoute(path: 'pending-requests', builder: (context, state) => const PendingRequestsScreen()),
+                   GoRoute(path: 'revenue', builder: (context, state) => const RevenueStatsScreen()),
+                   GoRoute(path: 'bank-details', builder: (context, state) => const BankDetailsScreen()),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+
     ],
   );
 }

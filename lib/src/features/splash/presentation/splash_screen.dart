@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:washfamily/src/features/authentication/presentation/screens/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,11 +21,21 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigateToNextScreen() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      // GoRouter : On remplace l'écran actuel par /login
-      // On utilise 'go' et pas 'push' pour ne pas pouvoir revenir au splash avec "Retour"
-      context.go('/login'); 
+    // On attend le délai ET que Firebase ait chargé la session depuis son cache
+    final results = await Future.wait([
+      Future.delayed(const Duration(seconds: 2)),
+      FirebaseAuth.instance.authStateChanges().first,
+    ]);
+
+    if (!mounted) return;
+
+    final user = results[1] as User?;
+    if (user != null) {
+      // Magie 🪄 : il est déjà connecté, on l'envoie au bon endroit
+      await checkAuthRedirection(context, user);
+    } else {
+      // Inconnu : direction la page de garde
+      context.go('/login');
     }
   }
 

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../domain/models/user_model.dart';
+import '../../data/repositories/user_repository.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -177,10 +180,29 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: () {
-                    // C'est ici qu'on enregistrera tout dans Firestore
-                    // Pour l'instant, on va vers l'accueil (La Map)
-                    context.go('/home'); 
+                  onPressed: () async {
+                    // Enregistrement dans Firestore
+                    try {
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (user != null) {
+                        final newUser = UserModel(
+                          uid: user.uid,
+                          firstName: _firstNameController.text.trim(),
+                          lastName: _lastNameController.text.trim(),
+                          phoneNumber: user.phoneNumber ?? '',
+                        );
+                        await UserRepository().createUser(newUser);
+                      }
+                      if (context.mounted) {
+                        context.go('/home'); 
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Erreur: $e')),
+                        );
+                      }
+                    }
                   },
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),

@@ -1,96 +1,143 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/services/auth_service.dart';
 import 'package:go_router/go_router.dart';
-import '../../logic/auth_controller.dart';
-import '../../../../shared/custom_button.dart';
-import '../../../../shared/custom_text_field.dart';
+import 'login_screen.dart';
 
-class RegisterScreen extends ConsumerStatefulWidget {
+class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
   @override
-  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends ConsumerState<RegisterScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
+class _RegisterScreenState extends State<RegisterScreen> {
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  bool _isLoading = false;
+  bool _obscureText = true;
 
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    if (_passwordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+  Future<void> _register() async {
+    final email = _emailCtrl.text.trim();
+    final pwd = _passwordCtrl.text.trim();
+    if (email.isEmpty || pwd.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email invalide ou mot de passe trop court.')));
       return;
     }
-    ref
-        .read(authControllerProvider.notifier)
-        .register(_emailController.text.trim(), _passwordController.text);
+
+    setState(() => _isLoading = true);
+    try {
+      final credential = await AuthService().registerWithEmail(email, pwd);
+      if (credential.user != null) {
+        if (!mounted) return;
+        await checkAuthRedirection(context, credential.user!);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(authControllerProvider, (previous, next) {
-      if (next.hasError) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(next.error.toString())));
-      }
-    });
-
-    final state = ref.watch(authControllerProvider);
-    final isLoading = state.isLoading;
-
+    final theme = Theme.of(context);
+    
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leadingWidth: 150,
+        leading: TextButton.icon(
           onPressed: () => context.pop(),
+          icon: Icon(Icons.arrow_back, color: theme.primaryColor, size: 18),
+          label: Text("Retour", style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
         ),
       ),
-      body: Center(
-        child: SingleChildScrollView(
+      body: SafeArea(
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'Create account',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              const SizedBox(height: 40),
+               Text(
+                "Créer un compte\nWashFamily",
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF0F172A),
+                  height: 1.2
+                ),
               ),
-              const SizedBox(height: 32),
-              CustomTextField(
-                controller: _emailController,
-                label: 'Email',
-                keyboardType: TextInputType.emailAddress,
+              const SizedBox(height: 16),
+              Text(
+                 "Rejoignez le réseau de pressing à proximité pour faciliter votre quotidien.",
+                 style: theme.textTheme.bodyLarge?.copyWith(
+                  color: const Color(0xFF475569),
+                  height: 1.5,
+                ),
               ),
-              const SizedBox(height: 12),
-              CustomTextField(
-                controller: _passwordController,
-                label: 'Password',
-                obscureText: true,
+              const SizedBox(height: 48),
+              
+              Text("ADRESSE E-MAIL", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey[700], letterSpacing: 1.5)),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: TextField(
+                  controller: _emailCtrl,
+                  decoration: InputDecoration(
+                    hintText: "nom@exemple.com",
+                    hintStyle: TextStyle(color: Colors.grey[400]),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
               ),
-              const SizedBox(height: 12),
-              CustomTextField(
-                controller: _confirmPasswordController,
-                label: 'Confirm Password',
-                obscureText: true,
-              ),
+              
               const SizedBox(height: 24),
-              CustomButton(
-                onPressed: _submit,
-                label: 'Sign up',
-                isLoading: isLoading,
+              
+              Text("MOT DE PASSE (6 caractères min.)", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey[700], letterSpacing: 1.5)),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: TextField(
+                  controller: _passwordCtrl,
+                  decoration: InputDecoration(
+                    hintText: "••••••••",
+                    hintStyle: TextStyle(color: Colors.grey[400]),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscureText ? Icons.visibility : Icons.visibility_off, color: Colors.grey[500]),
+                      onPressed: () => setState(() => _obscureText = !_obscureText),
+                    ),
+                  ),
+                  obscureText: _obscureText,
+                ),
               ),
+
+              const SizedBox(height: 32),
+              
+              _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : FilledButton(
+                    onPressed: _register,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text("S'inscrire", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ),
             ],
           ),
         ),

@@ -1,0 +1,294 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+/// Écran de développement pour insérer des données de test dans Firestore.
+/// ⚠️ À RETIRER AVANT LA MISE EN PRODUCTION
+class DevSeedScreen extends StatefulWidget {
+  const DevSeedScreen({super.key});
+
+  @override
+  State<DevSeedScreen> createState() => _DevSeedScreenState();
+}
+
+class _DevSeedScreenState extends State<DevSeedScreen> {
+  bool _isSeeding = false;
+  String _log = '';
+
+  // ── 10 machines de test réalistes en Île-de-France ──────────────
+  static const List<Map<String, dynamic>> _testMachines = [
+    {
+      'brand': 'Bosch',
+      'characteristics': {'capacityKg': 8, 'brand': 'Bosch', 'description': '[Lave-linge] Machine récente (2022), très silencieuse. Disponible 7j/7. Parking gratuit. — Lessive fournie.'},
+      'location': {'lat': 48.8566, 'lng': 2.3522, 'address': '5 Av. Anatole France, 75007 Paris'},
+      'pricing': {'pricePerWash': 4.5, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'AVAILABLE',
+      'stats': {'rating': 4.8, 'reviewCount': 24},
+    },
+    {
+      'brand': 'LG',
+      'characteristics': {'capacityKg': 9, 'brand': 'LG', 'description': '[Lave-linge] Grande capacité parfaite pour les familles. Rez-de-chaussée. Accès facile.'},
+      'location': {'lat': 48.8737, 'lng': 2.2950, 'address': '14 Rue du Faubourg Saint-Honoré, 75008 Paris'},
+      'pricing': {'pricePerWash': 5.0, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'AVAILABLE',
+      'stats': {'rating': 4.6, 'reviewCount': 12},
+    },
+    {
+      'brand': 'Samsung',
+      'characteristics': {'capacityKg': 7, 'brand': 'Samsung', 'description': '[Lave-linge] Lave-linge Samsung WW70TA046AE. Bon état général. Horaires : 9h-21h.'},
+      'location': {'lat': 48.8462, 'lng': 2.3488, 'address': '27 Bd du Montparnasse, 75006 Paris'},
+      'pricing': {'pricePerWash': 3.5, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'AVAILABLE',
+      'stats': {'rating': 4.2, 'reviewCount': 8},
+    },
+    {
+      'brand': 'Whirlpool',
+      'characteristics': {'capacityKg': 6, 'brand': 'Whirlpool', 'description': '[Sèche-linge] Sèche-linge à condensation, parfait pour finir le lavage. — Lessive fournie.'},
+      'location': {'lat': 48.8655, 'lng': 2.3491, 'address': '12 Rue de Rivoli, 75004 Paris'},
+      'pricing': {'pricePerWash': 3.0, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'AVAILABLE',
+      'stats': {'rating': 4.0, 'reviewCount': 5},
+    },
+    {
+      'brand': 'Miele',
+      'characteristics': {'capacityKg': 8, 'brand': 'Miele', 'description': '[Lave-linge] Miele W1 — qualité supérieure. Très doux pour les vêtements. Sur RDV.'},
+      'location': {'lat': 48.8797, 'lng': 2.3556, 'address': '3 Rue Lafayette, 75009 Paris'},
+      'pricing': {'pricePerWash': 6.0, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'AVAILABLE',
+      'stats': {'rating': 4.9, 'reviewCount': 31},
+    },
+    {
+      'brand': 'Electrolux',
+      'characteristics': {'capacityKg': 7, 'brand': 'Electrolux', 'description': '[Combiné] Lave-linge séchant 2-en-1. Pratique pour les petits espaces.'},
+      'location': {'lat': 48.8320, 'lng': 2.3707, 'address': '45 Av. d\'Italie, 75013 Paris'},
+      'pricing': {'pricePerWash': 5.5, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'AVAILABLE',
+      'stats': {'rating': 4.4, 'reviewCount': 17},
+    },
+    {
+      'brand': 'Candy',
+      'characteristics': {'capacityKg': 8, 'brand': 'Candy', 'description': '[Lave-linge] Machine connectée, commandes depuis l\'app. Accessible 24h/24.'},
+      'location': {'lat': 48.8952, 'lng': 2.3387, 'address': '78 Rue de la Chapelle, 75018 Paris'},
+      'pricing': {'pricePerWash': 4.0, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'AVAILABLE',
+      'stats': {'rating': 4.1, 'reviewCount': 9},
+    },
+    {
+      'brand': 'Hotpoint',
+      'characteristics': {'capacityKg': 10, 'brand': 'Hotpoint', 'description': '[Lave-linge] Grande capacité 10kg. Parfait pour couettes et draps. — Lessive fournie.'},
+      'location': {'lat': 48.8409, 'lng': 2.2891, 'address': '22 Rue de la Convention, 75015 Paris'},
+      'pricing': {'pricePerWash': 5.0, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'IN_USE',
+      'stats': {'rating': 4.5, 'reviewCount': 22},
+    },
+    {
+      'brand': 'AEG',
+      'characteristics': {'capacityKg': 8, 'brand': 'AEG', 'description': '[Lave-linge] Machine à laver AEG ProSteam, élimine 99,9% des bactéries.'},
+      'location': {'lat': 48.8610, 'lng': 2.4270, 'address': '113 Av. de la République, 75011 Paris'},
+      'pricing': {'pricePerWash': 4.8, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'AVAILABLE',
+      'stats': {'rating': 4.7, 'reviewCount': 14},
+    },
+    {
+      'brand': 'Siemens',
+      'characteristics': {'capacityKg': 9, 'brand': 'Siemens', 'description': '[Lave-linge] Siemens iQ500, classe A, très économique en eau et en énergie.'},
+      'location': {'lat': 48.8184, 'lng': 2.3267, 'address': '5 Av. du Général Leclerc, 75014 Paris'},
+      'pricing': {'pricePerWash': 4.2, 'currency': 'EUR'},
+      'media': {'photoUrls': []},
+      'status': 'AVAILABLE',
+      'stats': {'rating': 4.3, 'reviewCount': 19},
+    },
+  ];
+
+  Future<void> _seedMachines() async {
+    setState(() {
+      _isSeeding = true;
+      _log = '⏳ Démarrage du seed...\n';
+    });
+
+    final firestore = FirebaseFirestore.instance;
+    final collection = firestore.collection('machines');
+    int count = 0;
+
+    // Ajouter un utilisateur propriétaire de test
+    const ownerUid = 'test_owner_seed_001';
+    try {
+      await firestore.collection('users').doc(ownerUid).set({
+        'uid': ownerUid,
+        'firstName': 'Jean',
+        'lastName': 'Dupont',
+        'email': 'jean.dupont@washfamily.com',
+        'role': 'OWNER',
+        'verified': true,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      setState(() => _log += '✅ Propriétaire de test créé (jean.dupont)\n');
+    } catch (e) {
+      setState(() => _log += '⚠️ Propriétaire déjà existant ou erreur : $e\n');
+    }
+
+    for (final machine in _testMachines) {
+      try {
+        await collection.add({
+          ...machine,
+          'ownerId': ownerUid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        count++;
+        setState(() => _log += '✅ Machine ${machine['brand']} ajoutée\n');
+        await Future.delayed(const Duration(milliseconds: 200));
+      } catch (e) {
+        setState(() => _log += '❌ Erreur pour ${machine['brand']} : $e\n');
+      }
+    }
+
+    setState(() {
+      _isSeeding = false;
+      _log += '\n🎉 $count/${_testMachines.length} machines insérées avec succès !';
+    });
+  }
+
+  Future<void> _clearMachines() async {
+    setState(() {
+      _isSeeding = true;
+      _log = '🗑️ Suppression des machines de test...\n';
+    });
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('machines')
+          .where('ownerId', isEqualTo: 'test_owner_seed_001')
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      setState(() {
+        _isSeeding = false;
+        _log += '✅ ${snapshot.docs.length} machines supprimées.';
+      });
+    } catch (e) {
+      setState(() {
+        _isSeeding = false;
+        _log += '❌ Erreur : $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: Text(
+          '🔧 Dev — Seed Firestore',
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: const Color(0xFF0F172A),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Banner d'avertissement
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3CD),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFFCC00)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.warning_amber_rounded, color: Color(0xFFB45309)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Outil de développement uniquement. Supprimer avant la mise en production.',
+                    style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF92400E), fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 20),
+
+            Text('${_testMachines.length} machines de test en Île-de-France',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16, color: const Color(0xFF0F172A))),
+            Text('Bosch, LG, Samsung, Miele, AEG, Siemens...',
+                style: GoogleFonts.inter(color: const Color(0xFF64748B), fontSize: 13)),
+
+            const SizedBox(height: 24),
+
+            // Bouton Seed
+            FilledButton.icon(
+              onPressed: _isSeeding ? null : _seedMachines,
+              icon: const Icon(Icons.upload_rounded),
+              label: Text('Insérer les ${_testMachines.length} machines dans Firestore',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: const Color(0xFF2563EB),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Bouton Clear
+            OutlinedButton.icon(
+              onPressed: _isSeeding ? null : _clearMachines,
+              icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626)),
+              label: Text('Supprimer les machines de test',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFFDC2626))),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: const BorderSide(color: Color(0xFFDC2626)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Log de progression
+            if (_log.isNotEmpty)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      _log,
+                      style: GoogleFonts.sourceCodePro(color: const Color(0xFF4ADE80), fontSize: 12),
+                    ),
+                  ),
+                ),
+              ),
+
+            if (_isSeeding)
+              const Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
