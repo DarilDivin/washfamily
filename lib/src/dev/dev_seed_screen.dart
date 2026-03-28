@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Écran de développement pour insérer des données de test dans Firestore.
@@ -15,12 +16,12 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
   bool _isSeeding = false;
   String _log = '';
 
-  // ── 10 machines de test réalistes en Île-de-France ──────────────
+  // ── 10 machines de test réalistes à Évry ──────────────
   static const List<Map<String, dynamic>> _testMachines = [
     {
       'brand': 'Bosch',
       'characteristics': {'capacityKg': 8, 'brand': 'Bosch', 'description': '[Lave-linge] Machine récente (2022), très silencieuse. Disponible 7j/7. Parking gratuit. — Lessive fournie.'},
-      'location': {'lat': 48.8566, 'lng': 2.3522, 'address': '5 Av. Anatole France, 75007 Paris'},
+      'location': {'lat': 48.6290, 'lng': 2.4400, 'address': 'Université d\'Évry, 91000 Évry-Courcouronnes'},
       'pricing': {'pricePerWash': 4.5, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'AVAILABLE',
@@ -29,7 +30,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     {
       'brand': 'LG',
       'characteristics': {'capacityKg': 9, 'brand': 'LG', 'description': '[Lave-linge] Grande capacité parfaite pour les familles. Rez-de-chaussée. Accès facile.'},
-      'location': {'lat': 48.8737, 'lng': 2.2950, 'address': '14 Rue du Faubourg Saint-Honoré, 75008 Paris'},
+      'location': {'lat': 48.6310, 'lng': 2.4420, 'address': 'Centre Commercial Évry 2, 91000 Évry'},
       'pricing': {'pricePerWash': 5.0, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'AVAILABLE',
@@ -38,7 +39,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     {
       'brand': 'Samsung',
       'characteristics': {'capacityKg': 7, 'brand': 'Samsung', 'description': '[Lave-linge] Lave-linge Samsung WW70TA046AE. Bon état général. Horaires : 9h-21h.'},
-      'location': {'lat': 48.8462, 'lng': 2.3488, 'address': '27 Bd du Montparnasse, 75006 Paris'},
+      'location': {'lat': 48.6280, 'lng': 2.4380, 'address': 'Gare d\'Évry-Courcouronnes, 91000 Évry'},
       'pricing': {'pricePerWash': 3.5, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'AVAILABLE',
@@ -47,7 +48,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     {
       'brand': 'Whirlpool',
       'characteristics': {'capacityKg': 6, 'brand': 'Whirlpool', 'description': '[Sèche-linge] Sèche-linge à condensation, parfait pour finir le lavage. — Lessive fournie.'},
-      'location': {'lat': 48.8655, 'lng': 2.3491, 'address': '12 Rue de Rivoli, 75004 Paris'},
+      'location': {'lat': 48.6325, 'lng': 2.4350, 'address': 'Préfecture de l\'Essonne, 91000 Évry'},
       'pricing': {'pricePerWash': 3.0, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'AVAILABLE',
@@ -56,7 +57,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     {
       'brand': 'Miele',
       'characteristics': {'capacityKg': 8, 'brand': 'Miele', 'description': '[Lave-linge] Miele W1 — qualité supérieure. Très doux pour les vêtements. Sur RDV.'},
-      'location': {'lat': 48.8797, 'lng': 2.3556, 'address': '3 Rue Lafayette, 75009 Paris'},
+      'location': {'lat': 48.6270, 'lng': 2.4450, 'address': 'Parc des Loges, 91000 Évry'},
       'pricing': {'pricePerWash': 6.0, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'AVAILABLE',
@@ -65,7 +66,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     {
       'brand': 'Electrolux',
       'characteristics': {'capacityKg': 7, 'brand': 'Electrolux', 'description': '[Combiné] Lave-linge séchant 2-en-1. Pratique pour les petits espaces.'},
-      'location': {'lat': 48.8320, 'lng': 2.3707, 'address': '45 Av. d\'Italie, 75013 Paris'},
+      'location': {'lat': 48.6350, 'lng': 2.4480, 'address': 'Courcouronnes Centre, 91080 Courcouronnes'},
       'pricing': {'pricePerWash': 5.5, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'AVAILABLE',
@@ -74,7 +75,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     {
       'brand': 'Candy',
       'characteristics': {'capacityKg': 8, 'brand': 'Candy', 'description': '[Lave-linge] Machine connectée, commandes depuis l\'app. Accessible 24h/24.'},
-      'location': {'lat': 48.8952, 'lng': 2.3387, 'address': '78 Rue de la Chapelle, 75018 Paris'},
+      'location': {'lat': 48.6250, 'lng': 2.4300, 'address': 'Bras de Fer, 91000 Évry'},
       'pricing': {'pricePerWash': 4.0, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'AVAILABLE',
@@ -83,7 +84,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     {
       'brand': 'Hotpoint',
       'characteristics': {'capacityKg': 10, 'brand': 'Hotpoint', 'description': '[Lave-linge] Grande capacité 10kg. Parfait pour couettes et draps. — Lessive fournie.'},
-      'location': {'lat': 48.8409, 'lng': 2.2891, 'address': '22 Rue de la Convention, 75015 Paris'},
+      'location': {'lat': 48.6400, 'lng': 2.4500, 'address': 'Route de Corbeil, 91000 Évry'},
       'pricing': {'pricePerWash': 5.0, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'IN_USE',
@@ -92,7 +93,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     {
       'brand': 'AEG',
       'characteristics': {'capacityKg': 8, 'brand': 'AEG', 'description': '[Lave-linge] Machine à laver AEG ProSteam, élimine 99,9% des bactéries.'},
-      'location': {'lat': 48.8610, 'lng': 2.4270, 'address': '113 Av. de la République, 75011 Paris'},
+      'location': {'lat': 48.6200, 'lng': 2.4350, 'address': 'Quartier des Épinettes, 91000 Évry'},
       'pricing': {'pricePerWash': 4.8, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'AVAILABLE',
@@ -101,7 +102,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     {
       'brand': 'Siemens',
       'characteristics': {'capacityKg': 9, 'brand': 'Siemens', 'description': '[Lave-linge] Siemens iQ500, classe A, très économique en eau et en énergie.'},
-      'location': {'lat': 48.8184, 'lng': 2.3267, 'address': '5 Av. du Général Leclerc, 75014 Paris'},
+      'location': {'lat': 48.6305, 'lng': 2.4500, 'address': 'Bords de Seine, 91000 Évry'},
       'pricing': {'pricePerWash': 4.2, 'currency': 'EUR'},
       'media': {'photoUrls': []},
       'status': 'AVAILABLE',
@@ -119,22 +120,19 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     final collection = firestore.collection('machines');
     int count = 0;
 
-    // Ajouter un utilisateur propriétaire de test
-    const ownerUid = 'test_owner_seed_001';
-    try {
-      await firestore.collection('users').doc(ownerUid).set({
-        'uid': ownerUid,
-        'firstName': 'Jean',
-        'lastName': 'Dupont',
-        'email': 'jean.dupont@washfamily.com',
-        'role': 'OWNER',
-        'verified': true,
-        'createdAt': FieldValue.serverTimestamp(),
+    // Attribuer les machines à l'utilisateur actuellement connecté
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      setState(() {
+        _log += '❌ Erreur : Vous devez être connecté pour lancer ce script.\n';
+        _isSeeding = false;
       });
-      setState(() => _log += '✅ Propriétaire de test créé (jean.dupont)\n');
-    } catch (e) {
-      setState(() => _log += '⚠️ Propriétaire déjà existant ou erreur : $e\n');
+      return;
     }
+    
+    final ownerUid = currentUser.uid;
+    setState(() => _log += '✅ Propriétaire utilisé : vous-même ($ownerUid)\n');
+
 
     for (final machine in _testMachines) {
       try {
@@ -164,9 +162,12 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
     });
 
     try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
       final snapshot = await FirebaseFirestore.instance
           .collection('machines')
-          .where('ownerId', isEqualTo: 'test_owner_seed_001')
+          .where('ownerId', isEqualTo: currentUser.uid)
           .get();
 
       final batch = FirebaseFirestore.instance.batch();
@@ -226,7 +227,7 @@ class _DevSeedScreenState extends State<DevSeedScreen> {
             ),
             const SizedBox(height: 20),
 
-            Text('${_testMachines.length} machines de test en Île-de-France',
+            Text('${_testMachines.length} machines de test à Évry',
                 style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16, color: const Color(0xFF0F172A))),
             Text('Bosch, LG, Samsung, Miele, AEG, Siemens...',
                 style: GoogleFonts.inter(color: const Color(0xFF64748B), fontSize: 13)),

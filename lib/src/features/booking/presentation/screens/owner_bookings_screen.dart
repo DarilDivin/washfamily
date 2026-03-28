@@ -24,6 +24,9 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    if (_uid.isNotEmpty) {
+      _repo.autoCancelGhostings(_uid, isOwner: true);
+    }
   }
 
   @override
@@ -37,24 +40,43 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('Demandes reçues', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text('Demandes reçues', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 22)),
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: const Color(0xFF0F172A),
         surfaceTintColor: Colors.transparent,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: const Color(0xFF2563EB),
-          indicatorWeight: 3,
-          labelColor: const Color(0xFF2563EB),
-          unselectedLabelColor: const Color(0xFF94A3B8),
-          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 12),
-          unselectedLabelStyle: GoogleFonts.inter(fontSize: 12),
-          tabs: const [
-            Tab(text: 'En attente'),
-            Tab(text: 'Confirmées'),
-            Tab(text: 'Historique'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.white,
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
+                ),
+                labelColor: const Color(0xFF0F172A),
+                unselectedLabelColor: const Color(0xFF64748B),
+                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
+                unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13),
+                padding: const EdgeInsets.all(4),
+                tabs: const [
+                  Tab(text: 'En attente'),
+                  Tab(text: 'Confirmées'),
+                  Tab(text: 'Historique'),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
       body: StreamBuilder<List<ReservationModel>>(

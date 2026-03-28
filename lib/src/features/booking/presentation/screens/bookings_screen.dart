@@ -21,6 +21,9 @@ class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProvid
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    if (_uid.isNotEmpty) {
+      _repo.autoCancelGhostings(_uid, isOwner: false);
+    }
   }
 
   @override
@@ -35,23 +38,42 @@ class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProvid
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text('Mes Réservations', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text('Mes Réservations', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 22)),
         backgroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: const Color(0xFF2563EB),
-          indicatorWeight: 3,
-          labelColor: const Color(0xFF2563EB),
-          unselectedLabelColor: const Color(0xFF94A3B8),
-          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-          unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
-          tabs: const [
-            Tab(text: 'À venir'),
-            Tab(text: 'Passées'),
-            Tab(text: 'Annulées'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.white,
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
+                ),
+                labelColor: const Color(0xFF0F172A),
+                unselectedLabelColor: const Color(0xFF64748B),
+                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
+                unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13),
+                padding: const EdgeInsets.all(4),
+                tabs: const [
+                  Tab(text: 'À venir'),
+                  Tab(text: 'Passées'),
+                  Tab(text: 'Annulées'),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
       body: StreamBuilder<List<ReservationModel>>(
@@ -73,7 +95,7 @@ class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProvid
           return TabBarView(
             controller: _tabController,
             children: [
-              _ReservationList(reservations: upcoming, emptyMessage: 'Aucune réservation à venir', emptyIcon: Icons.calendar_today_outlined),
+              _ReservationList(reservations: upcoming, emptyMessage: 'Aucune réservation à venir', emptyIcon: Icons.calendar_today_rounded),
               _ReservationList(reservations: past, emptyMessage: 'Aucune réservation passée', emptyIcon: Icons.history_rounded),
               _ReservationList(reservations: cancelled, emptyMessage: 'Aucune réservation annulée', emptyIcon: Icons.cancel_outlined),
             ],
@@ -101,7 +123,7 @@ class _ReservationList extends StatelessWidget {
       return _EmptyState(message: emptyMessage, icon: emptyIcon);
     }
     return ListView.builder(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       itemCount: reservations.length,
       itemBuilder: (context, i) => _ReservationCard(reservation: reservations[i]),
     );
@@ -117,11 +139,11 @@ class _ReservationCard extends StatelessWidget {
     final r = reservation;
     final isPast = r.startTime.isBefore(DateTime.now());
 
-    final (statusLabel, statusColor, statusBg) = switch (r.status) {
-      'CONFIRMED' => ('Confirmée', const Color(0xFF16A34A), const Color(0xFFDCFCE7)),
-      'CANCELLED' => ('Annulée', const Color(0xFFDC2626), const Color(0xFFFEE2E2)),
-      'COMPLETED' => ('Terminée', const Color(0xFF6366F1), const Color(0xFFEDE9FE)),
-      _ => ('En attente', const Color(0xFFD97706), const Color(0xFFFFF3CD)),
+    final (statusLabel, statusColor, statusBg, statusIcon) = switch (r.status) {
+      'CONFIRMED' => ('Confirmée', const Color(0xFF16A34A), const Color(0xFFDCFCE7), Icons.check_circle_rounded),
+      'CANCELLED' => ('Annulée', const Color(0xFFDC2626), const Color(0xFFFEE2E2), Icons.cancel_rounded),
+      'COMPLETED' => ('Terminée', const Color(0xFF6366F1), const Color(0xFFEDE9FE), Icons.verified_rounded),
+      _ => ('En attente', const Color(0xFFD97706), const Color(0xFFFFF3CD), Icons.hourglass_top_rounded),
     };
 
     return Container(
@@ -129,92 +151,145 @@ class _ReservationCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 12, offset: const Offset(0, 4))],
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          )
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Header coloré ───────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E3A8A).withValues(alpha: 0.04),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)]),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.local_laundry_service_rounded, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(r.machineBrand, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15, color: const Color(0xFF0F172A))),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(12)),
-                child: Text(statusLabel, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 11, color: statusColor)),
-              ),
-            ]),
-          ),
-
-          // ── Corps ───────────────────────────────────────────────
+          // ── En-tête (Badge & Marque) ─────────
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              Row(children: [
-                const Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF94A3B8)),
-                const SizedBox(width: 8),
-                Text(
-                  DateFormat('EEEE d MMMM yyyy', 'fr').format(r.startTime),
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
-                ),
-              ]),
-              const SizedBox(height: 8),
-              Row(children: [
-                const Icon(Icons.access_time_rounded, size: 14, color: Color(0xFF94A3B8)),
-                const SizedBox(width: 8),
-                Text(
-                  '${DateFormat('HH:mm').format(r.startTime)} → ${DateFormat('HH:mm').format(r.endTime)}',
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
-                ),
-                const Spacer(),
-                Text(
-                  '${r.totalPrice.toStringAsFixed(2)} €',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w900, fontSize: 16, color: const Color(0xFF2563EB)),
-                ),
-              ]),
-              if (r.machineAddress != null) ...[
-                const SizedBox(height: 8),
-                Row(children: [
-                  const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF94A3B8)),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(r.machineAddress!, style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B)), overflow: TextOverflow.ellipsis)),
-                ]),
-              ],
-
-              // Bouton annuler uniquement sur les réservations à venir PENDING
-              if (!isPast && r.status == 'PENDING') ...[
-                const SizedBox(height: 12),
-                const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => _cancel(context, r),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFDC2626)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.local_laundry_service_rounded, color: Color(0xFF2563EB), size: 20),
                     ),
-                    child: Text('Annuler', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFFDC2626))),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Machine', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                        Text(r.machineBrand.toUpperCase(), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: const Color(0xFF0F172A))),
+                      ],
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(20)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, color: statusColor, size: 14),
+                      const SizedBox(width: 4),
+                      Text(statusLabel, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11, color: statusColor)),
+                    ],
                   ),
                 ),
               ],
-            ]),
+            ),
           ),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          
+          // ── Détails Date & Prix ─────────
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_month_rounded, size: 16, color: Color(0xFF64748B)),
+                          const SizedBox(width: 6),
+                          Text(
+                            DateFormat('EEEE d MMM yyyy', 'fr').format(r.startTime),
+                            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          const Icon(Icons.schedule_rounded, size: 16, color: Color(0xFF64748B)),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${DateFormat('HH:mm').format(r.startTime)} - ${DateFormat('HH:mm').format(r.endTime)}',
+                            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
+                          ),
+                        ],
+                      ),
+                      if (r.machineAddress != null && r.machineAddress!.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF64748B)),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text(r.machineAddress!, style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B), height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 60,
+                  color: const Color(0xFFF1F5F9),
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                Column(
+                  children: [
+                    Text('Total', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${r.totalPrice.toStringAsFixed(2)} €',
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 20, color: const Color(0xFF2563EB)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // ── Actions ─────────
+          if (!isPast && r.status == 'PENDING') ...[
+            Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: OutlinedButton(
+                onPressed: () => _cancel(context, r),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFDC2626)),
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('Annuler la réservation', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: const Color(0xFFDC2626))),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -224,14 +299,21 @@ class _ReservationCard extends StatelessWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Annuler la réservation', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-        content: Text('Voulez-vous vraiment annuler cette réservation ?', style: GoogleFonts.inter()),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626)),
+            const SizedBox(width: 8),
+            Text('Annulation', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 20)),
+          ],
+        ),
+        content: Text('Voulez-vous vraiment annuler cette réservation ? Cette action est irréversible.', style: GoogleFonts.inter(color: const Color(0xFF475569))),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Non')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Retour', style: GoogleFonts.inter(color: const Color(0xFF64748B), fontWeight: FontWeight.bold))),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Oui, annuler'),
+            child: Text('Confirmer', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -251,15 +333,18 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) => Center(
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFEFF6FF)),
-        child: Icon(icon, size: 48, color: const Color(0xFF2563EB)),
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+          boxShadow: [BoxShadow(color: const Color(0xFF2563EB).withValues(alpha: 0.1), blurRadius: 30, offset: const Offset(0, 10))],
+        ),
+        child: Icon(icon, size: 56, color: const Color(0xFF2563EB)),
       ),
-      const SizedBox(height: 16),
-      Text(message, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16, color: const Color(0xFF0F172A))),
+      const SizedBox(height: 24),
+      Text(message, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: const Color(0xFF0F172A))),
       const SizedBox(height: 8),
-      Text('Découvrez les machines près de chez vous !',
-          style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B))),
+      Text('Découvrez les machines près de chez vous !', style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF64748B))),
     ]),
   );
 }
@@ -270,7 +355,23 @@ class _ErrorWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Padding(padding: const EdgeInsets.all(24),
-      child: Text('Une erreur est survenue.\n$message', textAlign: TextAlign.center, style: GoogleFonts.inter(color: Colors.red))),
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFECACA))),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 40),
+            const SizedBox(height: 12),
+            Text('Erreur de chargement', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: const Color(0xFF991B1B))),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center, style: GoogleFonts.inter(color: const Color(0xFFB91C1C), fontSize: 12)),
+          ],
+        ),
+      ),
+    ),
   );
 }
+

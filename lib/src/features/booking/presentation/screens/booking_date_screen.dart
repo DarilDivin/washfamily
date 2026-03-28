@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../data/repositories/firestore_reservation_repository.dart';
 import '../../../machines_map/domain/models/machine_model.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:washfamily/src/features/authentication/data/repositories/user_repository.dart';
+import 'package:washfamily/src/features/authentication/domain/models/user_model.dart';
 
 /// Étape 1 du tunnel de réservation.
 /// L'utilisateur choisit une date puis un créneau horaire disponible.
@@ -21,18 +24,37 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
 
   DateTime _selectedDay = DateTime.now();
   int? _selectedHour; // Heure du début (ex: 10 = 10h00)
+  int _selectedDuration = 1; // Durée en heures (max 4)
   List<DateTime> _bookedSlots = [];
   bool _loadingSlots = false;
 
   static const _primaryColor = Color(0xFF2563EB);
 
-  // Créneaux disponibles : 8h à 21h (la durée d'un créneau = 1h)
-  static const List<int> _hours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+  List<int> get _hours {
+    if (!widget.machine.availableDays.contains(_selectedDay.weekday)) return [];
+    final length = widget.machine.endTimeHour - widget.machine.startTimeHour;
+    if (length <= 0) return [];
+    return List.generate(length, (i) => widget.machine.startTimeHour + i);
+  }
+
+  UserModel? _currentUser;
+  bool _loadingUser = true;
 
   @override
   void initState() {
     super.initState();
+    _loadUser();
     _loadSlots(_selectedDay);
+  }
+
+  Future<void> _loadUser() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      final user = await UserRepository().getUser(uid);
+      if (mounted) setState(() { _currentUser = user; _loadingUser = false; });
+    } else {
+      if (mounted) setState(() { _loadingUser = false; });
+    }
   }
 
   Future<void> _loadSlots(DateTime date) async {
@@ -55,6 +77,24 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
     return slotDate.isBefore(now);
   }
 
+  bool _canBookDuration(int startHour, int duration) {
+    for (int i = 0; i < duration; i++) {
+       final h = startHour + i;
+       if (_isBooked(h) || _isPast(h)) return false;
+       if (!_hours.contains(h)) return false; // Ne pas dépasser la grille dispo
+    }
+    return true;
+  }
+
+  void _setDuration(int dur) {
+    setState(() {
+      _selectedDuration = dur;
+      if (_selectedHour != null && !_canBookDuration(_selectedHour!, dur)) {
+        _selectedHour = null;
+      }
+    });
+  }
+
   void _onDaySelected(DateTime day) {
     if (day.isBefore(DateTime.now().subtract(const Duration(days: 1)))) return;
     setState(() => _selectedDay = day);
@@ -64,8 +104,8 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
   void _confirm() {
     if (_selectedHour == null) return;
     final start = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, _selectedHour!);
-    final end = start.add(const Duration(hours: 1));
-    final price = widget.machine.pricePerWash;
+    final end = start.add(Duration(hours: _selectedDuration));
+    final price = widget.machine.pricePerWash * _selectedDuration;
 
     context.push('/bookings/summary', extra: {
       'machine': widget.machine,
@@ -115,38 +155,100 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12)),
                   child: Text(
-                    '${widget.machine.pricePerWash.toStringAsFixed(2)} €',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: _primaryColor, fontSize: 14),
+                    '${widget.machine.pricePerWash.toStringAsFixed(2)} €/h',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: _primaryColor, fontSize: 13),
                   ),
                 ),
               ],
             ),
           ),
 
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                // ── Sélecteur de mois ──────────────────────────────────
-                _SectionLabel('Choisissez une date'),
+          if (_loadingUser)
+            const Expanded(child: Center(child: CircularProgressIndicator()))
+          else if (_currentUser != null && _currentUser!.remainingReservations <= 0 && !_currentUser!.isAdmin && !_currentUser!.isOwner)
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.block, size: 64, color: Color(0xFFDC2626)),
+                      const SizedBox(height: 16),
+                      Text("Limite atteinte", style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A))),
+                      const SizedBox(height: 8),
+                      Text("Vous n'avez plus de réservations disponibles.", style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF64748B)), textAlign: TextAlign.center),
+                      const SizedBox(height: 24),
+                      FilledButton(
+                        onPressed: () => context.push('/subscriptions'),
+                        style: FilledButton.styleFrom(backgroundColor: _primaryColor, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                        child: Text("Voir les abonnements", style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  // ── Sélecteur de mois ──────────────────────────────────
+                  _SectionLabel('Choisissez une date'),
                 const SizedBox(height: 12),
                 _CalendarWidget(
                   selectedDay: _selectedDay,
                   onDaySelected: _onDaySelected,
+                  availableDays: widget.machine.availableDays,
                 ),
                 const SizedBox(height: 24),
 
-                // ── Grille horaire ─────────────────────────────────────
                 Row(children: [
-                  _SectionLabel('Choisissez un créneau'),
+                  _SectionLabel('Choisissez une durée'),
+                ]),
+                const SizedBox(height: 12),
+                Row(
+                  children: [1, 2, 3, 4].map((dur) {
+                    final selected = _selectedDuration == dur;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => _setDuration(dur),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: selected ? _primaryColor : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: selected ? _primaryColor : const Color(0xFFE2E8F0)),
+                            boxShadow: selected ? [BoxShadow(color: _primaryColor.withValues(alpha: 0.3), blurRadius: 8)] : null,
+                          ),
+                          child: Text('$dur h', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: selected ? Colors.white : const Color(0xFF374151))),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+                Row(children: [
+                  _SectionLabel('Choisissez un créneau (${_selectedDuration}h)'),
                   const SizedBox(width: 8),
                   if (_loadingSlots)
                     const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
                 ]),
-                const SizedBox(height: 4),
-                Text('Durée : 1 heure', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF94A3B8))),
                 const SizedBox(height: 12),
-                GridView.builder(
+                if (_hours.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 20, bottom: 20),
+                    child: Center(
+                      child: Text('Aucun créneau disponible ce jour',
+                          style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontStyle: FontStyle.italic)),
+                    ),
+                  )
+                else
+                  GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -158,30 +260,29 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
                   itemCount: _hours.length,
                   itemBuilder: (context, i) {
                     final hour = _hours[i];
-                    final booked = _isBooked(hour);
-                    final past = _isPast(hour);
-                    final disabled = booked || past;
-                    final selected = _selectedHour == hour;
+                    final disabled = !_canBookDuration(hour, _selectedDuration);
+                    final isSelectedSpan = _selectedHour != null && hour >= _selectedHour! && hour < _selectedHour! + _selectedDuration;
+                    final isStart = _selectedHour == hour;
 
                     return GestureDetector(
                       onTap: disabled ? null : () => setState(() => _selectedHour = hour),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         decoration: BoxDecoration(
-                          color: selected
-                              ? _primaryColor
+                          color: isSelectedSpan
+                              ? _primaryColor.withValues(alpha: isStart ? 1 : 0.7)
                               : disabled
                                   ? const Color(0xFFF1F5F9)
                                   : Colors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: selected
+                            color: isSelectedSpan
                                 ? _primaryColor
                                 : disabled
                                     ? const Color(0xFFE2E8F0)
                                     : const Color(0xFFCBD5E1),
                           ),
-                          boxShadow: selected
+                          boxShadow: isStart
                               ? [BoxShadow(color: _primaryColor.withValues(alpha: 0.3), blurRadius: 8)]
                               : null,
                         ),
@@ -191,7 +292,7 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
                           style: GoogleFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
-                            color: selected
+                            color: isSelectedSpan
                                 ? Colors.white
                                 : disabled
                                     ? const Color(0xFFCBD5E1)
@@ -224,7 +325,7 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
       ),
 
       // ── CTA Continuer ───────────────────────────────────────────────
-      bottomNavigationBar: SafeArea(
+      bottomNavigationBar: _loadingUser || (_currentUser != null && _currentUser!.remainingReservations <= 0 && !_currentUser!.isAdmin && !_currentUser!.isOwner) ? null : SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
           child: Column(
@@ -244,7 +345,8 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
                     const SizedBox(width: 8),
                     Text(
                       '${DateFormat('EEE d MMM', 'fr').format(_selectedDay)}'
-                      ' · ${_selectedHour!.toString().padLeft(2, '0')}h00 → ${(_selectedHour! + 1).toString().padLeft(2, '0')}h00',
+                      ' · ${_selectedHour!.toString().padLeft(2, '0')}h00 → ${(_selectedHour! + _selectedDuration).toString().padLeft(2, '0')}h00\n'
+                      'Total: ${(widget.machine.pricePerWash * _selectedDuration).toStringAsFixed(2)} €',
                       style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: _primaryColor, fontSize: 13),
                     ),
                   ]),
@@ -260,7 +362,6 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
                 ),
                 child: Text(
                   _selectedHour == null ? 'Choisissez un créneau' : 'Continuer',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             ],
@@ -306,7 +407,13 @@ class _LegendDot extends StatelessWidget {
 class _CalendarWidget extends StatefulWidget {
   final DateTime selectedDay;
   final ValueChanged<DateTime> onDaySelected;
-  const _CalendarWidget({required this.selectedDay, required this.onDaySelected});
+  final List<int> availableDays;
+
+  const _CalendarWidget({
+    required this.selectedDay,
+    required this.onDaySelected,
+    required this.availableDays,
+  });
 
   @override
   State<_CalendarWidget> createState() => _CalendarWidgetState();
@@ -381,9 +488,11 @@ class _CalendarWidgetState extends State<_CalendarWidget> {
               final isSelected = DateUtils.isSameDay(date, widget.selectedDay);
               final isToday = DateUtils.isSameDay(date, today);
               final isPast = date.isBefore(DateTime(today.year, today.month, today.day));
+              final isAvailableDay = widget.availableDays.contains(date.weekday);
+              final isDisabled = isPast || !isAvailableDay;
 
               return GestureDetector(
-                onTap: isPast ? null : () => widget.onDaySelected(date),
+                onTap: isDisabled ? null : () => widget.onDaySelected(date),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   margin: const EdgeInsets.all(2),
@@ -394,15 +503,16 @@ class _CalendarWidgetState extends State<_CalendarWidget> {
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    '$day',
+                    day.toString(),
                     style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 14,
+                      fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
                       color: isSelected
                           ? Colors.white
-                          : isPast
-                              ? const Color(0xFFCBD5E1)
+                          : isDisabled
+                              ? const Color(0xFFCBD5E1) // Gris clair si bloqué ou passé
                               : const Color(0xFF374151),
+                      decoration: (!isAvailableDay && !isPast) ? TextDecoration.lineThrough : null, // Barré si jour fermé
                     ),
                   ),
                 ),

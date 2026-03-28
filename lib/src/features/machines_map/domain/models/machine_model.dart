@@ -17,6 +17,11 @@ class MachineModel {
   
   final double rating;
   final int reviewCount;
+
+  // Disponibilités
+  final List<int> availableDays; // 1 = Lundi, 7 = Dimanche
+  final int startTimeHour;
+  final int endTimeHour;
   
   MachineModel({
     required this.id,
@@ -34,9 +39,12 @@ class MachineModel {
     this.status = "AVAILABLE",
     this.rating = 0.0,
     this.reviewCount = 0,
+    // Par défaut, ouvert tous les jours de 8h à 21h
+    this.availableDays = const [1, 2, 3, 4, 5, 6, 7],
+    this.startTimeHour = 8,
+    this.endTimeHour = 21,
   });
 
-  // Future factorisation pour Firestore
   factory MachineModel.fromJson(Map<String, dynamic> json, String documentId) {
     return MachineModel(
       id: documentId,
@@ -54,6 +62,11 @@ class MachineModel {
       status: json['status'] ?? 'AVAILABLE',
       rating: json['stats']?['rating']?.toDouble() ?? 0.0,
       reviewCount: json['stats']?['reviewCount']?.toInt() ?? 0,
+      availableDays: json['availability']?['availableDays'] != null 
+          ? List<int>.from(json['availability']['availableDays']) 
+          : const [1, 2, 3, 4, 5, 6, 7],
+      startTimeHour: json['availability']?['startTimeHour']?.toInt() ?? 8,
+      endTimeHour: json['availability']?['endTimeHour']?.toInt() ?? 21,
     );
   }
 
@@ -82,6 +95,11 @@ class MachineModel {
       'stats': {
         'rating': rating,
         'reviewCount': reviewCount,
+      },
+      'availability': {
+        'availableDays': availableDays,
+        'startTimeHour': startTimeHour,
+        'endTimeHour': endTimeHour,
       },
     };
   }

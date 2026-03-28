@@ -21,6 +21,10 @@ import '../features/user_profile/presentation/screens/my_machines_screen.dart';
 import '../features/user_profile/presentation/screens/profile_subscreens.dart';
 import '../features/shop/presentation/screens/shop_screen.dart';
 import '../features/messages/presentation/screens/messages_screen.dart';
+import '../features/admin/presentation/screens/admin_dashboard_screen.dart';
+import '../features/admin/presentation/screens/manage_products_screen.dart';
+import '../features/subscriptions/presentation/screens/subscription_plans_screen.dart';
+import '../features/shop/presentation/screens/cart_screen.dart';
 import '../features/machines_map/domain/models/machine_model.dart';
 import '../dev/dev_seed_screen.dart';
 import '../features/machines_map/presentation/screens/machine_detail_screen.dart';
@@ -121,8 +125,20 @@ GoRouter router(RouterRef ref) {
         builder: (context, state) => const ProfileSetupScreen(),
       ),
       GoRoute(
+        path: '/subscriptions',
+        builder: (context, state) => const SubscriptionPlansScreen(),
+      ),
+      GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/admin/dashboard',
+        builder: (context, state) => const AdminDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/admin/products',
+        builder: (context, state) => const ManageProductsScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
@@ -142,9 +158,16 @@ GoRouter router(RouterRef ref) {
               GoRoute(
                 path: '/shop',
                 builder: (context, state) => const ShopScreen(),
+                routes: [
+                   GoRoute(
+                     path: 'cart',
+                     builder: (context, state) => const CartScreen(),
+                   ),
+                ]
               ),
             ],
           ),
+
           StatefulShellBranch(
             routes: [
               GoRoute(

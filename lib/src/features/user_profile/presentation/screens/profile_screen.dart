@@ -80,6 +80,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final isOwner = _userModel!.isOwner;
+    final isAdmin = _userModel!.isAdmin;
 
     return Scaffold(
       backgroundColor: const Color(0xFF1E293B), // Dark background matching Figma frame ? Wait, looking closely at the Figma background, it's actually white/grey inside the frame. 
@@ -213,6 +214,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (isAdmin) ...[
+                      _buildSectionHeader("ADMINISTRATION"),
+                      _MenuTile(icon: Icons.admin_panel_settings_rounded, title: "Tableau de Bord Admin", onTap: () => context.push('/admin/dashboard')),
+                      const SizedBox(height: 24),
+                    ],
+                    
                     _buildSectionHeader("ACTIVITÉ"),
                     if (!isOwner) ...[
                       _MenuTile(icon: Icons.history_rounded, title: "Mes réservations", onTap: () => context.go('/bookings')),
@@ -221,7 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ] else ...[
                       _MenuTile(icon: Icons.local_laundry_service_outlined, title: "Mes machines", onTap: () => context.push('/profile/my-machines')),
                       const SizedBox(height: 8),
-                      _MenuTile(icon: Icons.notifications_outlined, title: "Demandes en attente", onTap: () => context.push('/profile/pending-requests')),
+                      _MenuTile(icon: Icons.notifications_outlined, title: "Demandes en attente", onTap: () => context.push('/profile/owner-bookings')),
                       const SizedBox(height: 8),
                       _MenuTile(icon: Icons.bar_chart_rounded, title: "Revenus & Statistiques", onTap: () => context.push('/profile/revenue')),
                     ],
@@ -259,6 +266,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         "WASHFAMILY V1.0.0",
                         style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1.5),
                       ),
+                    ),
+                    const SizedBox(height: 32),
+                    _buildSectionHeader("MODE DÉVELOPPEUR"),
+                    _MenuTile(
+                      icon: Icons.data_object_rounded,
+                      title: "Outils Dev (Seed Data)",
+
+                      onTap: () => context.push('/dev/seed'),
                     ),
                     const SizedBox(height: 64), // Safe offset
                   ],
