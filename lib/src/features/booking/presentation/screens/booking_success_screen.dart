@@ -138,7 +138,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
                 opacity: _fadeAnim,
                 child: Column(children: [
                   FilledButton(
-                    onPressed: () => context.go('/reservations'),
+                    onPressed: () => context.go('/bookings'),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       backgroundColor: const Color(0xFF2563EB),
@@ -150,7 +150,7 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
                   ),
                   const SizedBox(height: 12),
                   TextButton(
-                    onPressed: () => context.go('/'),
+                    onPressed: () => context.go('/home'),
                     child: Text('Retour à l\'accueil',
                         style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
                   ),

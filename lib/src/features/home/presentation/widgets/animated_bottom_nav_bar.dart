@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // ------------------------------------------------------------------
 // AnimatedBottomNavBar — Effet "Sliding Glow"
@@ -110,10 +112,7 @@ class AnimatedBottomNavBar extends StatelessWidget {
                         isActive: currentIndex == 2,
                         onTap: () => onTap(2),
                       ),
-                      _NavItem(
-                        iconOutlined: Icons.chat_bubble_outline_rounded,
-                        iconFilled: Icons.chat_bubble_rounded,
-                        label: "Messages",
+                      _NotifNavItem(
                         isActive: currentIndex == 3,
                         onTap: () => onTap(3),
                       ),
@@ -189,6 +188,98 @@ class _NavItem extends StatelessWidget {
                 ),
                 builder: (context, color, _) => Text(
                   label,
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------------
+// _NotifNavItem — Onglet Notifications avec badge temps réel
+// ------------------------------------------------------------------
+class _NotifNavItem extends StatelessWidget {
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _NotifNavItem({required this.isActive, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final targetColor = isActive ? const Color(0xFF2563EB) : const Color(0xFF64748B);
+    final icon = isActive ? Icons.notifications_rounded : Icons.notifications_none_rounded;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          height: 66,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Icône avec badge non lues
+              StreamBuilder<String?>(
+                stream: FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
+                  if (user == null) return const Stream.empty();
+                  return FirebaseFirestore.instance
+                      .collection('notifications')
+                      .where('userId', isEqualTo: user.uid)
+                      .where('isRead', isEqualTo: false)
+                      .snapshots()
+                      .map((snap) => snap.docs.length > 9 ? '9+' : snap.docs.length > 0 ? '${snap.docs.length}' : null);
+                }),
+                builder: (context, snapshot) {
+                  final badge = snapshot.data;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(icon,
+                            key: ValueKey(isActive), color: targetColor, size: 22),
+                      ),
+                      if (badge != null)
+                        Positioned(
+                          right: -6,
+                          top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDC2626),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              badge,
+                              style: const TextStyle(
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 4),
+              TweenAnimationBuilder<Color?>(
+                duration: const Duration(milliseconds: 200),
+                tween: ColorTween(
+                  begin: isActive ? const Color(0xFF64748B) : const Color(0xFF2563EB),
+                  end: targetColor,
+                ),
+                builder: (context, color, _) => Text(
+                  'Notifs',
                   style: GoogleFonts.inter(
                     fontSize: 10,
                     fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,

@@ -13,6 +13,7 @@ class ReservationModel {
   final String status; // 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'
   final String? renterNote;
   final DateTime createdAt;
+  final bool reminderSent;
 
   ReservationModel({
     required this.id,
@@ -27,6 +28,7 @@ class ReservationModel {
     this.status = 'PENDING',
     this.renterNote,
     DateTime? createdAt,
+    this.reminderSent = false,
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory ReservationModel.fromJson(Map<String, dynamic> json, String docId) {
@@ -49,6 +51,7 @@ class ReservationModel {
       status: json['status'] as String? ?? 'PENDING',
       renterNote: json['renterNote'] as String?,
       createdAt: parseDate(json['createdAt']),
+      reminderSent: json['reminderSent'] as bool? ?? false,
     );
   }
 
@@ -65,12 +68,13 @@ class ReservationModel {
       'status': status,
       'renterNote': renterNote,
       'createdAt': Timestamp.fromDate(createdAt),
+      'reminderSent': reminderSent,
     };
   }
 
-  ReservationModel copyWith({String? status, String? renterNote}) {
+  ReservationModel copyWith({String? id, String? status, String? renterNote, bool? reminderSent}) {
     return ReservationModel(
-      id: id,
+      id: id ?? this.id,
       machineId: machineId,
       machineBrand: machineBrand,
       machineAddress: machineAddress,
@@ -82,6 +86,7 @@ class ReservationModel {
       status: status ?? this.status,
       renterNote: renterNote ?? this.renterNote,
       createdAt: createdAt,
+      reminderSent: reminderSent ?? this.reminderSent,
     );
   }
 }

@@ -78,9 +78,7 @@ class AdminDashboardScreen extends StatelessWidget {
               icon: Icons.people_outline,
               title: "Utilisateurs et Forfaits",
               subtitle: "Gérer les utilisateurs et les abonnements",
-              onTap: () {
-                // TODO: Navigation vers la gestion des utilisateurs
-              },
+              onTap: () => context.push('/admin/subscriptions'),
             ),
           ],
         ),

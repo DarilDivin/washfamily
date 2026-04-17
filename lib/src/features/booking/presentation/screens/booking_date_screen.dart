@@ -7,6 +7,7 @@ import '../../../machines_map/domain/models/machine_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:washfamily/src/features/authentication/data/repositories/user_repository.dart';
 import 'package:washfamily/src/features/authentication/domain/models/user_model.dart';
+import 'package:washfamily/src/features/subscriptions/data/subscription_repository.dart';
 
 /// Étape 1 du tunnel de réservation.
 /// L'utilisateur choisit une date puis un créneau horaire disponible.
@@ -40,6 +41,19 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
   UserModel? _currentUser;
   bool _loadingUser = true;
 
+  bool get _subscriptionExpired {
+    if (_currentUser == null || _currentUser!.isAdmin || _currentUser!.isOwner) return false;
+    final end = _currentUser!.subscriptionEndDate;
+    return end != null && end.isBefore(DateTime.now());
+  }
+
+  bool get _quotaExceeded {
+    if (_currentUser == null || _currentUser!.isAdmin || _currentUser!.isOwner) return false;
+    return _currentUser!.remainingReservations <= 0;
+  }
+
+  bool get _isBlocked => _subscriptionExpired || _quotaExceeded;
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +64,7 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
   Future<void> _loadUser() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
+      await SubscriptionRepository().checkAndResetIfExpired(uid);
       final user = await UserRepository().getUser(uid);
       if (mounted) setState(() { _currentUser = user; _loadingUser = false; });
     } else {
@@ -165,30 +180,11 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
 
           if (_loadingUser)
             const Expanded(child: Center(child: CircularProgressIndicator()))
-          else if (_currentUser != null && _currentUser!.remainingReservations <= 0 && !_currentUser!.isAdmin && !_currentUser!.isOwner)
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.block, size: 64, color: Color(0xFFDC2626)),
-                      const SizedBox(height: 16),
-                      Text("Limite atteinte", style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A))),
-                      const SizedBox(height: 8),
-                      Text("Vous n'avez plus de réservations disponibles.", style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF64748B)), textAlign: TextAlign.center),
-                      const SizedBox(height: 24),
-                      FilledButton(
-                        onPressed: () => context.push('/subscriptions'),
-                        style: FilledButton.styleFrom(backgroundColor: _primaryColor, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-                        child: Text("Voir les abonnements", style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            )
+          else if (_currentUser != null && _isBlocked)
+            Expanded(child: _BlockedView(
+              isExpired: _subscriptionExpired,
+              expiryDate: _currentUser!.subscriptionEndDate,
+            ))
           else
             Expanded(
               child: ListView(
@@ -325,7 +321,7 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
       ),
 
       // ── CTA Continuer ───────────────────────────────────────────────
-      bottomNavigationBar: _loadingUser || (_currentUser != null && _currentUser!.remainingReservations <= 0 && !_currentUser!.isAdmin && !_currentUser!.isOwner) ? null : SafeArea(
+      bottomNavigationBar: _loadingUser || (_currentUser != null && _isBlocked) ? null : SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
           child: Column(
@@ -375,6 +371,72 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
 // ─────────────────────────────────────────────────────────
 // Sous-widgets
 // ─────────────────────────────────────────────────────────
+
+class _BlockedView extends StatelessWidget {
+  final bool isExpired;
+  final DateTime? expiryDate;
+  const _BlockedView({required this.isExpired, this.expiryDate});
+
+  static const _primaryColor = Color(0xFF2563EB);
+
+  @override
+  Widget build(BuildContext context) {
+    final icon    = isExpired ? Icons.timer_off_outlined : Icons.block_outlined;
+    final color   = isExpired ? const Color(0xFFF97316) : const Color(0xFFDC2626);
+    final title   = isExpired ? 'Abonnement expiré' : 'Limite atteinte';
+    final subtitle = isExpired
+        ? 'Votre abonnement a expiré le ${_fmt(expiryDate)}.\nRenouvelez-le pour continuer à réserver.'
+        : "Vous n'avez plus de réservations disponibles ce mois-ci.";
+    final cta = isExpired ? 'Renouveler mon abonnement' : 'Voir les abonnements';
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 52, color: color),
+            ),
+            const SizedBox(height: 20),
+            Text(title,
+                style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF0F172A))),
+            const SizedBox(height: 10),
+            Text(subtitle,
+                style: GoogleFonts.inter(
+                    fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 28),
+            FilledButton(
+              onPressed: () => context.push('/subscriptions'),
+              style: FilledButton.styleFrom(
+                backgroundColor: _primaryColor,
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Text(cta,
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _fmt(DateTime? dt) {
+    if (dt == null) return '';
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+  }
+}
 
 class _SectionLabel extends StatelessWidget {
   final String text;

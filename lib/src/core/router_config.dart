@@ -20,8 +20,9 @@ import '../features/user_profile/presentation/screens/add_machine_screen.dart';
 import '../features/user_profile/presentation/screens/my_machines_screen.dart';
 import '../features/user_profile/presentation/screens/profile_subscreens.dart';
 import '../features/shop/presentation/screens/shop_screen.dart';
-import '../features/messages/presentation/screens/messages_screen.dart';
+import '../features/notifications/presentation/screens/notifications_screen.dart';
 import '../features/admin/presentation/screens/admin_dashboard_screen.dart';
+import '../features/admin/presentation/screens/admin_subscriptions_screen.dart';
 import '../features/admin/presentation/screens/manage_products_screen.dart';
 import '../features/subscriptions/presentation/screens/subscription_plans_screen.dart';
 import '../features/shop/presentation/screens/cart_screen.dart';
@@ -140,6 +141,10 @@ GoRouter router(RouterRef ref) {
         path: '/admin/products',
         builder: (context, state) => const ManageProductsScreen(),
       ),
+      GoRoute(
+        path: '/admin/subscriptions',
+        builder: (context, state) => const AdminSubscriptionsScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return MainScaffold(navigationShell: navigationShell);
@@ -179,8 +184,8 @@ GoRouter router(RouterRef ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/messages',
-                builder: (context, state) => const MessagesScreen(),
+                path: '/notifications',
+                builder: (context, state) => const NotificationsScreen(),
               ),
             ],
           ),
@@ -192,6 +197,13 @@ GoRouter router(RouterRef ref) {
                 routes: [
                    GoRoute(path: 'my-machines', builder: (context, state) => const MyMachinesScreen()),
                    GoRoute(path: 'add-machine', builder: (context, state) => const AddMachineScreen()),
+                   GoRoute(
+                     path: 'edit-machine',
+                     builder: (context, state) {
+                       final machine = state.extra as MachineModel;
+                       return EditMachineScreen(machine: machine);
+                     },
+                   ),
                    GoRoute(path: 'favorites', builder: (context, state) => const FavoritesScreen()),
                    GoRoute(path: 'personal-info', builder: (context, state) => const PersonalInfoScreen()),
                    GoRoute(path: 'payments', builder: (context, state) => const PaymentsScreen()),

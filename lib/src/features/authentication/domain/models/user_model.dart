@@ -5,7 +5,7 @@ class UserModel {
   final String firstName;
   final String lastName;
   final String phoneNumber;
-  final String role; // "USER", "OWNER", ou "ADMIN"
+  final List<String> roles; // ex: ['USER'], ['OWNER'], ['USER', 'OWNER'], ['ADMIN', 'OWNER']
   final DateTime createdAt;
   final String? currentSubscriptionId;
   final DateTime? subscriptionEndDate;
@@ -16,21 +16,34 @@ class UserModel {
     required this.firstName,
     required this.lastName,
     required this.phoneNumber,
-    this.role = 'USER', // Rôle par défaut
+    List<String>? roles,
     DateTime? createdAt,
     this.currentSubscriptionId,
     this.subscriptionEndDate,
-    this.remainingReservations = 2, // 2 réservations d'essai
-  }) : createdAt = createdAt ?? DateTime.now();
+    this.remainingReservations = 2,
+  })  : roles = roles ?? ['USER'],
+        createdAt = createdAt ?? DateTime.now();
 
   factory UserModel.fromJson(Map<String, dynamic> json, String documentId) {
+    // Lit 'roles' (List) ou 'role' (List ou String pour rétrocompat)
+    List<String> parsedRoles;
+    final rolesVal = json['roles'];
+    final roleVal = json['role'];
+    if (rolesVal is List) {
+      parsedRoles = List<String>.from(rolesVal);
+    } else if (roleVal is List) {
+      parsedRoles = List<String>.from(roleVal);
+    } else {
+      parsedRoles = [(roleVal as String? ?? 'USER')];
+    }
+
     return UserModel(
       uid: documentId,
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
       phoneNumber: json['phoneNumber'] ?? '',
-      role: json['role'] ?? 'USER',
-      createdAt: json['createdAt'] != null 
+      roles: parsedRoles,
+      createdAt: json['createdAt'] != null
           ? (json['createdAt'] as Timestamp).toDate()
           : DateTime.now(),
       currentSubscriptionId: json['currentSubscriptionId'],
@@ -46,7 +59,7 @@ class UserModel {
       'firstName': firstName,
       'lastName': lastName,
       'phoneNumber': phoneNumber,
-      'role': role,
+      'roles': roles,
       'createdAt': Timestamp.fromDate(createdAt),
       if (currentSubscriptionId != null) 'currentSubscriptionId': currentSubscriptionId,
       if (subscriptionEndDate != null) 'subscriptionEndDate': Timestamp.fromDate(subscriptionEndDate!),
@@ -54,9 +67,7 @@ class UserModel {
     };
   }
 
-  // Helper pour savoir si l'utilisateur est propriétaire
-  bool get isOwner => role == 'OWNER';
-
-  // Helper pour savoir si l'utilisateur est administrateur
-  bool get isAdmin => role == 'ADMIN';
+  bool get isOwner => roles.contains('OWNER');
+  bool get isAdmin => roles.contains('ADMIN');
+  bool get isUser => roles.contains('USER');
 }

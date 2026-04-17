@@ -4,7 +4,6 @@ import '../../domain/models/user_model.dart';
 class UserRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Crée un nouvel utilisateur en base de données après son inscription
   Future<void> createUser(UserModel user) async {
     try {
       await _firestore.collection('users').doc(user.uid).set(user.toJson());
@@ -13,7 +12,6 @@ class UserRepository {
     }
   }
 
-  /// Récupère les données de l'utilisateur connecté
   Future<UserModel?> getUser(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
@@ -26,14 +24,25 @@ class UserRepository {
     }
   }
 
-  /// Modifie le rôle de l'utilisateur (ex: pour devenir Propriétaire)
-  Future<void> updateUserRole(String uid, String newRole) async {
+  /// Ajoute un rôle à l'utilisateur (idempotent via arrayUnion)
+  Future<void> addRole(String uid, String role) async {
     try {
       await _firestore.collection('users').doc(uid).update({
-        'role': newRole,
+        'roles': FieldValue.arrayUnion([role]),
       });
     } catch (e) {
-      throw Exception('Erreur lors de la mise à jour du rôle : $e');
+      throw Exception('Erreur lors de l\'ajout du rôle : $e');
+    }
+  }
+
+  /// Retire un rôle à l'utilisateur (idempotent via arrayRemove)
+  Future<void> removeRole(String uid, String role) async {
+    try {
+      await _firestore.collection('users').doc(uid).update({
+        'roles': FieldValue.arrayRemove([role]),
+      });
+    } catch (e) {
+      throw Exception('Erreur lors du retrait du rôle : $e');
     }
   }
 }

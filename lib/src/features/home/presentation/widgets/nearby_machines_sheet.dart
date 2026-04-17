@@ -63,14 +63,15 @@ class _NearbyMachinesSheetState extends State<NearbyMachinesSheet> {
 
   /// Trie les machines par distance croissante
   List<MachineModel> get _sortedMachines {
-    if (widget.userLat == null) return widget.machines;
-    final sorted = [...widget.machines];
-    sorted.sort((a, b) {
-      final dA = _distanceTo(a) ?? 9999;
-      final dB = _distanceTo(b) ?? 9999;
-      return dA.compareTo(dB);
-    });
-    return sorted;
+    final list = [...widget.machines];
+    if (widget.userLat != null) {
+      list.sort((a, b) {
+        final dA = _distanceTo(a) ?? 9999;
+        final dB = _distanceTo(b) ?? 9999;
+        return dA.compareTo(dB);
+      });
+    }
+    return list;
   }
 
   @override
@@ -213,43 +214,59 @@ class _NearbyMachinesSheetState extends State<NearbyMachinesSheet> {
 class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFFEFF6FF),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxHeight < 200;
+        return SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!isCompact) ...[
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFFEFF6FF),
+                        ),
+                        child: const Icon(Icons.local_laundry_service_outlined,
+                            size: 40, color: Color(0xFF2563EB)),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    Text(
+                      'Aucune machine à proximité',
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF0F172A),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (!isCompact) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Aucune machine n\'est enregistrée\nprès de votre position actuelle.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: const Color(0xFF64748B),
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              child: const Icon(Icons.local_laundry_service_outlined,
-                  size: 48, color: Color(0xFF2563EB)),
             ),
-            const SizedBox(height: 20),
-            Text(
-              'Aucune machine à proximité',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Aucune machine n\'est enregistrée\nprès de votre position actuelle.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: const Color(0xFF64748B),
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

@@ -15,15 +15,11 @@ class BookingsScreen extends StatefulWidget {
 class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _repo = FirestoreReservationRepository();
-  final _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    if (_uid.isNotEmpty) {
-      _repo.autoCancelGhostings(_uid, isOwner: false);
-    }
   }
 
   @override
@@ -76,29 +72,50 @@ class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProvid
           ),
         ),
       ),
-      body: StreamBuilder<List<ReservationModel>>(
-        stream: _uid.isNotEmpty ? _repo.streamReservationsByRenter(_uid) : const Stream.empty(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      body: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnapshot) {
+          final uid = authSnapshot.data?.uid;
+
+          if (authSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
-            return _ErrorWidget(message: snapshot.error.toString());
+
+          if (uid == null) {
+            return const Center(child: CircularProgressIndicator());
           }
 
-          final all = snapshot.data ?? [];
-          final now = DateTime.now();
-          final upcoming = all.where((r) => r.startTime.isAfter(now) && r.status != 'CANCELLED').toList();
-          final past = all.where((r) => r.startTime.isBefore(now) && r.status != 'CANCELLED').toList();
-          final cancelled = all.where((r) => r.status == 'CANCELLED').toList();
+          // Lance l'auto-cancel ghostings et les rappels une seule fois
+          Future.microtask(() async {
+            await _repo.autoCancelGhostings(uid, isOwner: false);
+            await _repo.checkAndSendReminders(uid);
+          });
 
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _ReservationList(reservations: upcoming, emptyMessage: 'Aucune réservation à venir', emptyIcon: Icons.calendar_today_rounded),
-              _ReservationList(reservations: past, emptyMessage: 'Aucune réservation passée', emptyIcon: Icons.history_rounded),
-              _ReservationList(reservations: cancelled, emptyMessage: 'Aucune réservation annulée', emptyIcon: Icons.cancel_outlined),
-            ],
+          return StreamBuilder<List<ReservationModel>>(
+            stream: _repo.streamReservationsByRenter(uid),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return _ErrorWidget(message: snapshot.error.toString());
+              }
+
+              final all = snapshot.data ?? [];
+              final now = DateTime.now();
+              final upcoming  = all.where((r) => r.startTime.isAfter(now) && r.status != 'CANCELLED').toList();
+              final past      = all.where((r) => r.startTime.isBefore(now) && r.status != 'CANCELLED').toList();
+              final cancelled = all.where((r) => r.status == 'CANCELLED').toList();
+
+              return TabBarView(
+                controller: _tabController,
+                children: [
+                  _ReservationList(reservations: upcoming,  emptyMessage: 'Aucune réservation à venir',   emptyIcon: Icons.calendar_today_rounded),
+                  _ReservationList(reservations: past,      emptyMessage: 'Aucune réservation passée',    emptyIcon: Icons.history_rounded),
+                  _ReservationList(reservations: cancelled, emptyMessage: 'Aucune réservation annulée',   emptyIcon: Icons.cancel_outlined),
+                ],
+              );
+            },
           );
         },
       ),

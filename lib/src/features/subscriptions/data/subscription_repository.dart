@@ -42,9 +42,7 @@ class SubscriptionRepository {
   // Souscrire l'utilisateur à un plan
   Future<void> subscribeUserToPlan(String userId, SubscriptionPlanModel plan) async {
     try {
-      // Calculer la date de fin (ex: + 30 jours)
       final endDate = DateTime.now().add(const Duration(days: 30));
-
       await _firestore.collection('users').doc(userId).update({
         'currentSubscriptionId': plan.id,
         'subscriptionEndDate': Timestamp.fromDate(endDate),
@@ -52,6 +50,32 @@ class SubscriptionRepository {
       });
     } catch (e) {
       throw Exception('Erreur lors de la souscription au forfait : $e');
+    }
+  }
+
+  /// Vérifie si l'abonnement a expiré et, si c'est le cas, remet l'utilisateur
+  /// sur le tier gratuit (2 réservations, pas de plan actif).
+  /// Appelé côté client au chargement des écrans sensibles.
+  Future<void> checkAndResetIfExpired(String userId) async {
+    try {
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) return;
+      final data = doc.data()!;
+
+      final endRaw = data['subscriptionEndDate'];
+      if (endRaw == null) return; // Pas d'abonnement → rien à faire
+
+      final endDate = (endRaw as Timestamp).toDate();
+      if (!endDate.isBefore(DateTime.now())) return; // Pas encore expiré
+
+      // Expiration détectée → retour au tier gratuit
+      await _firestore.collection('users').doc(userId).update({
+        'currentSubscriptionId': FieldValue.delete(),
+        'subscriptionEndDate': FieldValue.delete(),
+        'remainingReservations': 2,
+      });
+    } catch (_) {
+      // Non critique : on ne bloque pas l'app si la vérification échoue
     }
   }
 }

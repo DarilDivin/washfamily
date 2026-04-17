@@ -18,15 +18,11 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _repo = FirestoreReservationRepository();
-  final _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    if (_uid.isNotEmpty) {
-      _repo.autoCancelGhostings(_uid, isOwner: true);
-    }
   }
 
   @override
@@ -79,45 +75,79 @@ class _OwnerBookingsScreenState extends State<OwnerBookingsScreen>
           ),
         ),
       ),
-      body: StreamBuilder<List<ReservationModel>>(
-        stream: _uid.isNotEmpty ? _repo.streamReservationsByOwner(_uid) : const Stream.empty(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      // StreamBuilder sur authStateChanges pour garantir que l'UID
+      // est disponible même si la session Firebase ne s'est pas encore restaurée
+      body: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnapshot) {
+          final uid = authSnapshot.data?.uid;
+
+          if (authSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final all = snapshot.data ?? [];
-          final pending = all.where((r) => r.status == 'PENDING').toList();
-          final confirmed = all.where((r) => r.status == 'CONFIRMED').toList();
-          final history = all.where((r) => r.status == 'CANCELLED' || r.status == 'COMPLETED').toList();
+          if (uid == null) {
+            return Center(
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.lock_outline_rounded, size: 48, color: Color(0xFF94A3B8)),
+                const SizedBox(height: 16),
+                Text('Vous devez être connecté.',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF64748B))),
+              ]),
+            );
+          }
 
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _OwnerList(
-                reservations: pending,
-                emptyMessage: 'Aucune demande en attente',
-                showActions: true,
-                repo: _repo,
-              ),
-              _OwnerList(
-                reservations: confirmed,
-                emptyMessage: 'Aucune réservation confirmée',
-                showActions: false,
-                repo: _repo,
-              ),
-              _OwnerList(
-                reservations: history,
-                emptyMessage: 'Aucun historique',
-                showActions: false,
-                repo: _repo,
-              ),
-            ],
+          // Lance l'auto-cancel ghostings une seule fois (via Future, pas de setState)
+          Future.microtask(() => _repo.autoCancelGhostings(uid, isOwner: true));
+
+          return StreamBuilder<List<ReservationModel>>(
+            stream: _repo.streamReservationsByOwner(uid),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              // Gestion des erreurs Firestore (index manquant, rules, etc.)
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      const Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFDC2626)),
+                      const SizedBox(height: 16),
+                      Text('Erreur de chargement',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                      const SizedBox(height: 8),
+                      Text(
+                        snapshot.error.toString(),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF94A3B8)),
+                      ),
+                    ]),
+                  ),
+                );
+              }
+
+              final all = snapshot.data ?? [];
+              final pending   = all.where((r) => r.status == 'PENDING').toList();
+              final confirmed = all.where((r) => r.status == 'CONFIRMED').toList();
+              final history   = all.where((r) => r.status == 'CANCELLED' || r.status == 'COMPLETED').toList();
+
+              return TabBarView(
+                controller: _tabController,
+                children: [
+                  _OwnerList(reservations: pending,   emptyMessage: 'Aucune demande en attente',   showActions: true,  repo: _repo),
+                  _OwnerList(reservations: confirmed, emptyMessage: 'Aucune réservation confirmée', showActions: false, repo: _repo),
+                  _OwnerList(reservations: history,   emptyMessage: 'Aucun historique',            showActions: false, repo: _repo),
+                ],
+              );
+            },
           );
         },
       ),
     );
   }
+
 }
 
 class _OwnerList extends StatelessWidget {
@@ -174,8 +204,61 @@ class _OwnerReservationCardState extends State<_OwnerReservationCard> {
   bool _loading = false;
 
   Future<void> _updateStatus(String status) async {
+    String? reason;
+
+    if (status == 'CANCELLED') {
+      reason = await showDialog<String>(
+        context: context,
+        builder: (ctx) {
+          final controller = TextEditingController();
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(children: [
+              const Icon(Icons.cancel_outlined, color: Color(0xFFDC2626)),
+              const SizedBox(width: 8),
+              Text('Refuser la demande', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+            ]),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Indiquez une raison (optionnel) :', style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF475569))),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: controller,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Ex : Machine en maintenance ce jour-là…',
+                    hintStyle: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF94A3B8)),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFDC2626))),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Annuler', style: GoogleFonts.inter(color: const Color(0xFF64748B), fontWeight: FontWeight.bold)),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: Text('Confirmer le refus', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      );
+      if (reason == null) return; // dialog annulé
+    }
+
     setState(() => _loading = true);
-    await widget.repo.updateStatus(widget.reservation.id, status);
+    await widget.repo.updateStatus(widget.reservation.id, status, cancelReason: reason);
     if (mounted) setState(() => _loading = false);
   }
 

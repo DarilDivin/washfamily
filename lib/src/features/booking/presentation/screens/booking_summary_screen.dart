@@ -85,11 +85,12 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
         renterNote: _noteCtrl.text.isNotEmpty ? _noteCtrl.text : null,
       );
 
-      await _repo.createReservation(reservation);
+      // createReservation retourne maintenant la réservation avec son vrai ID Firestore
+      final created = await _repo.createReservation(reservation);
 
       if (mounted) {
         setState(() => _isLoading = false);
-        context.pushReplacement('/bookings/success', extra: reservation.copyWith());
+        context.pushReplacement('/bookings/success', extra: created);
       }
     } catch (e) {
       if (mounted) {

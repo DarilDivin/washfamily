@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"d:\\\\Projects\\\\Flutter\\\\washfamily\" -type f -name \"*.dart\" -exec grep -l \"@riverpod\\\\|@Riverpod\" {} \\\\;)",
+      "Bash(python3 -)"
+    ]
+  }
+}

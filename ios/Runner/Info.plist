@@ -47,5 +47,11 @@
 		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>WashFamily a besoin d'accéder à vos photos pour ajouter des images de votre machine.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>WashFamily a besoin d'accéder à l'appareil photo pour prendre une photo de votre machine.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>WashFamily peut enregistrer des photos dans votre galerie.</string>
 	</dict>
 </plist>

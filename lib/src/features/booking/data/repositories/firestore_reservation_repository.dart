@@ -7,29 +7,56 @@ class FirestoreReservationRepository {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   CollectionReference get _col => _db.collection('reservations');
 
-  /// Crée une réservation dans Firestore et décrémente les réservations de l'utilisateur
-  Future<String> createReservation(ReservationModel reservation) async {
-    return await _db.runTransaction((transaction) async {
+  /// Crée une réservation dans Firestore, décrémente le quota et envoie la notification au propriétaire.
+  /// Retourne la réservation complète avec son vrai ID Firestore.
+  Future<ReservationModel> createReservation(ReservationModel reservation) async {
+    String newId = '';
+
+    await _db.runTransaction((transaction) async {
       final userRef = _db.collection('users').doc(reservation.renterId);
       final userDoc = await transaction.get(userRef);
-      
+
       if (userDoc.exists) {
         final userData = userDoc.data()!;
-        final role = userData['role'] as String? ?? 'USER';
-        if (role != 'OWNER' && role != 'ADMIN') {
+        final roles = userData['roles'] != null
+            ? List<String>.from(userData['roles'] as List)
+            : [(userData['role'] as String? ?? 'USER')];
+        if (!roles.contains('OWNER') && !roles.contains('ADMIN')) {
+          // Vérification expiration de l'abonnement
+          final endDateRaw = userData['subscriptionEndDate'];
+          if (endDateRaw != null) {
+            final endDate = (endDateRaw as Timestamp).toDate();
+            if (endDate.isBefore(DateTime.now())) {
+              throw Exception('subscription_expired');
+            }
+          }
+
           final remaining = (userData['remainingReservations'] as num?)?.toInt() ?? 0;
           if (remaining > 0) {
             transaction.update(userRef, {'remainingReservations': remaining - 1});
           } else {
-            throw Exception('Plus de réservations disponibles.');
+            throw Exception('quota_exceeded');
           }
         }
       }
 
       final resRef = _col.doc();
+      newId = resRef.id;
       transaction.set(resRef, reservation.toJson());
-      return resRef.id;
     });
+
+    // Notification au propriétaire (hors transaction pour ne pas la bloquer)
+    try {
+      await NotificationRepository().sendNotification(
+        userId: reservation.ownerId,
+        title: 'Nouvelle demande 🧺',
+        message: 'Une réservation a été demandée pour votre machine le ${DateFormat("dd MMM à HH:mm", "fr").format(reservation.startTime)}.',
+      );
+    } catch (_) {
+      // La notification n'est pas critique — on ne bloque pas le flux
+    }
+
+    return reservation.copyWith(id: newId);
   }
 
   /// Récupère les réservations d'un locataire, triées par date décroissante
@@ -84,21 +111,8 @@ class FirestoreReservationRepository {
         });
   }
 
-  /// Crée une nouvelle réservation
-  Future<void> addReservation(ReservationModel reservation) async {
-    final docRef = _col.doc(reservation.id);
-    await docRef.set(reservation.toJson());
-
-    // Notification au propriétaire
-    await NotificationRepository().sendNotification(
-      userId: reservation.ownerId,
-      title: 'Nouvelle demande 🧺',
-      message: 'Quelqu\'un souhaite réserver votre machine le ${DateFormat("dd MMM à HH:mm", "fr").format(reservation.startTime)}.',
-    );
-  }
-
   /// Met à jour le statut d'une réservation
-  Future<void> updateStatus(String reservationId, String newStatus) async {
+  Future<void> updateStatus(String reservationId, String newStatus, {String? cancelReason}) async {
     final docRef = _col.doc(reservationId);
     
     // Lire avant pour envoyer les notifs
@@ -112,7 +126,14 @@ class FirestoreReservationRepository {
     // Notifications vers le locataire
     if (newStatus == 'CONFIRMED' || newStatus == 'CANCELLED') {
       final title = newStatus == 'CONFIRMED' ? 'Réservation confirmée ✅' : 'Réservation refusée ❌';
-      final msg = newStatus == 'CONFIRMED' ? 'Le propriétaire de ${r.machineBrand} a accepté votre demande.' : 'Le propriétaire a annulé ou refusé votre demande pour ${r.machineBrand}.';
+      String msg;
+      if (newStatus == 'CONFIRMED') {
+        msg = 'Le propriétaire de ${r.machineBrand} a accepté votre demande pour le ${DateFormat("d MMM à HH:mm", "fr").format(r.startTime)}.';
+      } else {
+        msg = cancelReason != null && cancelReason.isNotEmpty
+            ? 'Votre demande pour ${r.machineBrand} a été refusée. Raison : $cancelReason'
+            : 'Le propriétaire a refusé votre demande pour ${r.machineBrand}.';
+      }
       await NotificationRepository().sendNotification(userId: r.renterId, title: title, message: msg);
     }
 
@@ -139,6 +160,39 @@ class FirestoreReservationRepository {
         // Ignorer l'erreur silencieusement en cas d'échec de batch
       }
     }
+  }
+
+  /// Vérifie les réservations CONFIRMED qui commencent dans les 24h et envoie un rappel si pas encore fait.
+  Future<void> checkAndSendReminders(String userId) async {
+    try {
+      final now = DateTime.now();
+      final in24h = now.add(const Duration(hours: 24));
+
+      final snapshot = await _col
+          .where('renterId', isEqualTo: userId)
+          .where('status', isEqualTo: 'CONFIRMED')
+          .where('reminderSent', isEqualTo: false)
+          .get();
+
+      for (final doc in snapshot.docs) {
+        final r = ReservationModel.fromJson(doc.data() as Map<String, dynamic>, doc.id);
+        if (r.startTime.isAfter(now) && r.startTime.isBefore(in24h)) {
+          await NotificationRepository().sendNotification(
+            userId: userId,
+            title: 'Rappel de RDV ⏰',
+            message: 'Votre réservation pour ${r.machineBrand} commence ${_formatRelative(r.startTime, now)}.',
+          );
+          await doc.reference.update({'reminderSent': true});
+        }
+      }
+    } catch (_) {}
+  }
+
+  String _formatRelative(DateTime start, DateTime now) {
+    final diff = start.difference(now);
+    if (diff.inMinutes < 60) return 'dans ${diff.inMinutes} min';
+    if (diff.inHours < 2) return 'dans 1h';
+    return 'dans ${diff.inHours}h (${DateFormat("HH:mm").format(start)})';
   }
 
   /// Nettoie les réservations PENDING dont l'heure de début est passée ou très proche (2h)

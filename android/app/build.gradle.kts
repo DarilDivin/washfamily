@@ -14,6 +14,12 @@ if (localPropertiesFile.exists()) {
     localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
 
+val envProperties = Properties()
+val envFile = rootProject.file("../.env")
+if (envFile.exists()) {
+    envFile.inputStream().use { envProperties.load(it) }
+}
+
 android {
     namespace = "com.washfamily.washfamily"
     compileSdk = flutter.compileSdkVersion
@@ -38,7 +44,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        manifestPlaceholders["mapsApiKey"] = localProperties.getProperty("MAPS_API_KEY") ?: ""
+        manifestPlaceholders["mapsApiKey"] = envProperties.getProperty("GOOGLE_MAPS_API_KEY") ?: ""
     }
 
     buildTypes {
