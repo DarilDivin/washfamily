@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../machines_map/domain/models/machine_model.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
-/// Carte machine premium pour la liste des machines proches.
-/// Affiche toutes les informations clés et navigue vers le détail au tap.
 class MachineCard extends StatelessWidget {
   final MachineModel machine;
   final double? distanceKm;
@@ -13,295 +13,283 @@ class MachineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final isAvailable = machine.status == 'AVAILABLE';
+    final isInUse     = machine.status == 'IN_USE';
 
-    return GestureDetector(
-      onTap: () {
-        // Navigation vers la page détail de la machine
-        context.push('/machine/${machine.id}', extra: machine);
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Image / Header ────────────────────────────────────────
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-              child: Stack(
-                children: [
-                  // Photo ou gradient placeholder
-                  if (machine.photoUrls.isNotEmpty)
-                    Image.network(
-                      machine.photoUrls.first,
-                      height: 140,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    )
-                  else
-                    Container(
-                      height: 140,
-                      width: double.infinity,
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
-                        ),
-                      ),
-                      child: Stack(
-                        children: [
-                          // Cercles décoratifs en arrière-plan
-                          Positioned(
-                            right: -20, top: -20,
-                            child: Container(
-                              width: 120, height: 120,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.08),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            left: -10, bottom: -30,
-                            child: Container(
-                              width: 100, height: 100,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.05),
-                              ),
-                            ),
-                          ),
-                          // Icône centrale
-                          Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.local_laundry_service_rounded,
-                                  size: 56,
-                                  color: Colors.white70,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  machine.brand,
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  // Badge Statut (haut gauche)
-                  Positioned(
-                    top: 12, left: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: isAvailable ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6, height: 6,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            isAvailable ? 'Disponible' : 'Occupée',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Distance (haut droit)
-                  if (distanceKm != null)
-                    Positioned(
-                      top: 12, right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.near_me_rounded, color: Colors.white, size: 12),
-                            const SizedBox(width: 4),
-                            Text(
-                              distanceKm! < 1
-                                  ? '${(distanceKm! * 1000).toStringAsFixed(0)} m'
-                                  : '${distanceKm!.toStringAsFixed(1)} km',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // ── Corps de la carte ─────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Ligne 1 : Brand + Prix
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        machine.brand,
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 17,
-                          color: const Color(0xFF0F172A),
-                        ),
-                      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+      child: Card(
+        child: InkWell(
+          onTap: () => context.push('/machine/${machine.id}', extra: machine),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Image / Placeholder ─────────────────────────────────
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(AppSpacing.radiusXl)),
+                child: Stack(
+                  children: [
+                    if (machine.photoUrls.isNotEmpty)
+                      Image.network(
+                        machine.photoUrls.first,
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      )
+                    else
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${machine.pricePerWash.toStringAsFixed(2)} €',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            color: const Color(0xFF2563EB),
+                        height: 160,
+                        width: double.infinity,
+                        color: AppColors.inputBackground,
+                        child: Center(
+                          child: PhosphorIcon(
+                            PhosphorIconsRegular.washingMachine,
+                            size: 56,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ),
-                    ],
-                  ),
 
-                  const SizedBox(height: 8),
+                    // Badge statut
+                    Positioned(
+                      top: AppSpacing.md,
+                      left: AppSpacing.md,
+                      child: _StatusBadge(
+                          isAvailable: isAvailable, isInUse: isInUse),
+                    ),
 
-                  // Ligne 2 : Icônes info (capacité, type, lessive)
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      _InfoChip(icon: Icons.water_drop_outlined, label: '${machine.capacityKg} kg'),
-                      if (machine.description.contains('[Sèche-linge]'))
-                        _InfoChip(icon: Icons.air_outlined, label: 'Sèche-linge')
-                      else if (machine.description.contains('[Combiné]'))
-                        _InfoChip(icon: Icons.loop_rounded, label: 'Combiné')
-                      else
-                        _InfoChip(icon: Icons.local_laundry_service_outlined, label: 'Lave-linge'),
-                      if (machine.description.contains('Lessive fournie'))
-                        _InfoChip(icon: Icons.soap_outlined, label: 'Lessive fournie', highlight: true),
-                    ],
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // Ligne 3 : Adresse + Note
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 13, color: Color(0xFF94A3B8)),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          machine.address ?? 'Adresse non précisée',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: const Color(0xFF64748B),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    // Distance
+                    if (distanceKm != null)
+                      Positioned(
+                        top: AppSpacing.md,
+                        right: AppSpacing.md,
+                        child: _DistanceBadge(distanceKm: distanceKm!),
                       ),
-                      if (machine.reviewCount > 0) ...[
-                        const Icon(Icons.star_rounded, size: 14, color: Color(0xFFFBBF24)),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${machine.rating.toStringAsFixed(1)} (${machine.reviewCount})',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF374151),
+                  ],
+                ),
+              ),
+
+              // ── Corps ───────────────────────────────────────────────
+              Padding(
+                padding: AppSpacing.cardPadding,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Marque + Prix
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(machine.brand, style: tt.titleMedium,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.xs),
+                          decoration: BoxDecoration(
+                            color: AppColors.completedBg,
+                            borderRadius:
+                                BorderRadius.circular(AppSpacing.radiusFull),
+                          ),
+                          child: Text(
+                            '${machine.pricePerWash.toStringAsFixed(2)} €',
+                            style: tt.labelLarge?.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w700),
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                ],
+                    ),
+
+                    const SizedBox(height: AppSpacing.sm),
+
+                    // Chips caractéristiques
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        _InfoChip(
+                            icon: PhosphorIconsRegular.drop,
+                            label: '${machine.capacityKg} kg'),
+                        if (machine.description.contains('[Sèche-linge]'))
+                          _InfoChip(
+                              icon: PhosphorIconsRegular.wind,
+                              label: 'Sèche-linge')
+                        else if (machine.description.contains('[Combiné]'))
+                          _InfoChip(
+                              icon: PhosphorIconsRegular.arrowsCounterClockwise,
+                              label: 'Combiné')
+                        else
+                          _InfoChip(
+                              icon: PhosphorIconsRegular.washingMachine,
+                              label: 'Lave-linge'),
+                        if (machine.description.contains('Lessive fournie'))
+                          _InfoChip(
+                              icon: PhosphorIconsRegular.sparkle,
+                              label: 'Lessive fournie',
+                              highlight: true),
+                      ],
+                    ),
+
+                    const SizedBox(height: AppSpacing.sm),
+
+                    // Adresse + Note
+                    Row(
+                      children: [
+                        PhosphorIcon(PhosphorIconsRegular.mapPin,
+                            size: 13, color: AppColors.textSecondary),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            machine.address ?? 'Adresse non précisée',
+                            style: tt.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (machine.reviewCount > 0) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          PhosphorIcon(PhosphorIconsFill.star,
+                              size: 14, color: AppColors.starActive),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(
+                            '${machine.rating.toStringAsFixed(1)} (${machine.reviewCount})',
+                            style: tt.labelSmall
+                                ?.copyWith(color: AppColors.textPrimary),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Petit badge d'information réutilisable
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool highlight;
+// ── Composants internes ───────────────────────────────────────────────────────
 
-  const _InfoChip({required this.icon, required this.label, this.highlight = false});
+class _StatusBadge extends StatelessWidget {
+  final bool isAvailable;
+  final bool isInUse;
+  const _StatusBadge({required this.isAvailable, required this.isInUse});
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final dotColor = isAvailable
+        ? AppColors.success
+        : isInUse
+            ? AppColors.warning
+            : AppColors.textSecondary;
+    final bgColor = isAvailable
+        ? AppColors.confirmedBg
+        : isInUse
+            ? AppColors.pendingBg
+            : AppColors.inputBackground;
+    final textColor = isAvailable
+        ? AppColors.confirmedText
+        : isInUse
+            ? AppColors.pendingText
+            : AppColors.textSecondary;
+    final label =
+        isAvailable ? 'Disponible' : isInUse ? 'En cours' : 'Indisponible';
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+          horizontal: 10, vertical: AppSpacing.xs / 2),
       decoration: BoxDecoration(
-        color: highlight ? const Color(0xFFEFF6FF) : const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(8),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12,
-            color: highlight ? const Color(0xFF2563EB) : const Color(0xFF64748B)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: highlight ? const Color(0xFF2563EB) : const Color(0xFF475569),
-            ),
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
           ),
+          const SizedBox(width: AppSpacing.xs),
+          Text(label,
+              style: tt.labelSmall?.copyWith(
+                  color: textColor, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _DistanceBadge extends StatelessWidget {
+  final double distanceKm;
+  const _DistanceBadge({required this.distanceKm});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final label = distanceKm < 1
+        ? '${(distanceKm * 1000).toStringAsFixed(0)} m'
+        : '${distanceKm.toStringAsFixed(1)} km';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.textPrimary.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PhosphorIcon(PhosphorIconsRegular.navigationArrow,
+              size: 10, color: AppColors.surface),
+          const SizedBox(width: AppSpacing.xs),
+          Text(label,
+              style: tt.labelSmall?.copyWith(
+                  color: AppColors.surface, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final PhosphorIconData icon;
+  final String label;
+  final bool highlight;
+
+  const _InfoChip(
+      {required this.icon, required this.label, this.highlight = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: highlight ? AppColors.completedBg : AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PhosphorIcon(icon,
+              size: 12,
+              color: highlight ? AppColors.primary : AppColors.textSecondary),
+          const SizedBox(width: AppSpacing.xs),
+          Text(label,
+              style: tt.labelSmall?.copyWith(
+                  color: highlight ? AppColors.primary : AppColors.textSecondary,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );

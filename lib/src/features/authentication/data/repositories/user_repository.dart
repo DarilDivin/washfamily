@@ -24,6 +24,19 @@ class UserRepository {
     }
   }
 
+  /// Stream temps-réel du document utilisateur.
+  /// L'UI se reconstruit automatiquement à chaque changement Firestore
+  /// (quota, rôle, abonnement, etc.).
+  Stream<UserModel?> streamUser(String uid) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .map((doc) => doc.exists && doc.data() != null
+            ? UserModel.fromJson(doc.data()!, doc.id)
+            : null);
+  }
+
   /// Ajoute un rôle à l'utilisateur (idempotent via arrayUnion)
   Future<void> addRole(String uid, String role) async {
     try {

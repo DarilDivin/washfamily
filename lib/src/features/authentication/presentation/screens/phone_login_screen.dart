@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:washfamily/src/features/authentication/data/services/auth_service.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 class PhoneLoginScreen extends StatefulWidget {
   const PhoneLoginScreen({super.key});
@@ -25,80 +28,77 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   }
 
   @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 16.0),
-          child: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.grey[200]!),
-            ),
-            child: IconButton(
-              icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface, size: 20),
-              onPressed: () => context.pop(),
-            ),
-          ),
+        foregroundColor: AppColors.textPrimary,
+        leading: IconButton(
+          icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft,
+              size: 20),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 40.0, bottom: 24),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl, AppSpacing.xxl, AppSpacing.xl, AppSpacing.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Titre ──────────────────────────────────────────────
               Text(
-                "Quel est votre\nnuméro?",
-                style: theme.textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  height: 1.2,
-                ),
+                'Quel est votre\nnuméro?',
+                style: tt.headlineLarge?.copyWith(height: 1.2),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
               Text(
-                "Nous vous enverrons un code par SMS pour vérifier votre identité.",
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
-                  height: 1.5,
-                ),
+                'Nous vous enverrons un code par SMS pour vérifier votre identité.',
+                style: tt.bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary, height: 1.5),
               ),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: AppSpacing.xxxl),
 
-              // --- CHAMP TÉLÉPHONE PREMIUM ---
+              // ── Champ téléphone ────────────────────────────────────
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  color: AppColors.inputBackground,
+                  borderRadius:
+                      BorderRadius.circular(AppSpacing.radiusMd),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Row(
                   children: [
                     Text(
-                      "🇫🇷  +33",
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF475569),
-                      ),
+                      '🇫🇷  +33',
+                      style: tt.titleSmall?.copyWith(
+                          color: AppColors.textSecondary),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: AppSpacing.lg),
                     Expanded(
                       child: TextField(
                         controller: _phoneController,
                         autofocus: true,
                         keyboardType: TextInputType.phone,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                        style:
+                            tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                         decoration: InputDecoration(
-                          hintText: "6 12 34 56 78",
-                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          hintText: '6 12 34 56 78',
+                          hintStyle: tt.titleSmall
+                              ?.copyWith(color: AppColors.textSecondary),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
@@ -108,104 +108,103 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                   ],
                 ),
               ),
-              
-              const SizedBox(height: 16),
-              
-              // Info block
-              Row(
-                children: [
-                  Container(
-                    width: 8, height: 8,
-                    decoration: BoxDecoration(color: theme.primaryColor, shape: BoxShape.circle),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    "DONNÉES SÉCURISÉES ET CRYPTÉES",
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey[500], letterSpacing: 0.5),
-                  )
-                ],
-              ),
+
+              const SizedBox(height: AppSpacing.md),
+
+              // ── Sécurité ───────────────────────────────────────────
+              Row(children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                      color: AppColors.primary, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  'DONNÉES SÉCURISÉES ET CRYPTÉES',
+                  style: tt.labelSmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      letterSpacing: 0.5,
+                      fontSize: 10),
+                ),
+              ]),
 
               const Spacer(),
 
-              // --- BOUTON D'ACTION ---
+              // ── CTA ────────────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: (_isButtonEnabled && !_isLoading)
                       ? () {
                           setState(() => _isLoading = true);
-                          final number = "+33${_phoneController.text.trim()}";
-
+                          final number =
+                              '+33${_phoneController.text.trim()}';
                           AuthService().verifyPhoneNumber(
                             phoneNumber: number,
                             onCodeSent: () {
                               setState(() => _isLoading = false);
-                              context.push('/otp', extra: number); 
+                              context.push('/otp', extra: number);
                             },
                             onError: (error) {
                               setState(() => _isLoading = false);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(error), backgroundColor: Colors.red),
+                                SnackBar(
+                                    content: Text(error),
+                                    backgroundColor: AppColors.error),
                               );
                             },
                           );
                         }
                       : null,
                   style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    backgroundColor: _isButtonEnabled ? theme.primaryColor : const Color(0xFFE2E8F0),
-                    foregroundColor: _isButtonEnabled ? Colors.white : Colors.grey[500],
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.lg),
+                    backgroundColor: AppColors.primary,
+                    disabledBackgroundColor: AppColors.border,
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusMd)),
                     elevation: 0,
                   ),
                   child: _isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text("Envoyer le code", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-                          SizedBox(width: 8),
-                          Icon(Icons.chevron_right, size: 20),
-                        ],
-                      ),
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              color: AppColors.surface, strokeWidth: 2))
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('Envoyer le code'),
+                            const SizedBox(width: AppSpacing.sm),
+                            const PhosphorIcon(
+                                PhosphorIconsRegular.arrowRight,
+                                size: 18),
+                          ],
+                        ),
                 ),
               ),
 
-              const SizedBox(height: 16),
-              
-              // Footer
+              const SizedBox(height: AppSpacing.md),
+
+              // ── Footer ─────────────────────────────────────────────
               Center(
                 child: Text(
-                  "En continuant, vous acceptez de recevoir un SMS. Des frais de\nmessage et de données peuvent s'appliquer.",
+                  'En continuant, vous acceptez de recevoir un SMS.\nDes frais peuvent s\'appliquer.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                  style: tt.bodySmall
+                      ?.copyWith(color: AppColors.textSecondary, fontSize: 10),
                 ),
               ),
-              const SizedBox(height: 24),
-              // Links
+              const SizedBox(height: AppSpacing.sm),
               Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text("WashFamily", style: TextStyle(fontWeight: FontWeight.w800, color: theme.primaryColor)),
-                  ],
-                ),
+                child: Text('WashFamily',
+                    style: tt.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary)),
               ),
-              const SizedBox(height: 16),
-              Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text("Privacy Policy", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                    const SizedBox(width: 16),
-                    Text("Terms of Service", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                    const SizedBox(width: 16),
-                    Text("Legal", style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
             ],
           ),
         ),

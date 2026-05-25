@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../domain/models/user_model.dart';
 import '../../data/repositories/user_repository.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -14,203 +17,215 @@ class ProfileSetupScreen extends StatefulWidget {
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-  
-  // Pour simuler l'état du switch de localisation
-  bool _isLocationEnabled = true; 
+  bool _isLocationEnabled = true;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // final size = MediaQuery.of(context).size;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      // AppBar simple pour éventuellement revenir en arrière si erreur
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        foregroundColor: AppColors.textPrimary,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
+          icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft,
+              size: 20),
           onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. TITRES
+              // ── Titre ──────────────────────────────────────────────
               Text(
-                "Finalisez voitre inscription",
-                style: theme.textTheme.headlineMedium,
+                'Finalisez votre inscription',
+                style: tt.headlineLarge,
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               Text(
-                "Votre photo et votre nom rassureront les propriétaires de machines.",
-                style: theme.textTheme.bodyLarge?.copyWith(color: Colors.grey),
+                'Votre photo et votre nom rassureront les propriétaires de machines.',
+                style: tt.bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary),
                 textAlign: TextAlign.center,
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: AppSpacing.xxl),
 
-              // 2. AVATAR (Selecteur Photo)
+              // ── Avatar ─────────────────────────────────────────────
               Center(
                 child: Stack(
                   children: [
-                    // Le cercle de l'avatar
                     Container(
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
+                        color: AppColors.surface,
                         shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+                        border: Border.all(
+                            color: AppColors.border, width: 2),
                       ),
-                      child: Icon(
-                        Icons.person, 
-                        size: 60, 
-                        color: Colors.grey[300]
+                      child: const PhosphorIcon(
+                        PhosphorIconsRegular.user,
+                        size: 56,
+                        color: AppColors.border,
                       ),
-                      // Plus tard, ici on affichera l'image choisie :
-                      // child: ClipOval(child: Image.file(_imageFile, fit: BoxFit.cover)),
                     ),
-                    
-                    // Le petit bouton "+" bleu
                     Positioned(
                       bottom: 0,
                       right: 0,
                       child: Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(AppSpacing.sm),
                         decoration: BoxDecoration(
-                          color: theme.primaryColor,
+                          color: AppColors.primary,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(
+                              color: AppColors.surface, width: 2),
                         ),
-                        child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                        child: const PhosphorIcon(
+                          PhosphorIconsRegular.camera,
+                          color: AppColors.surface,
+                          size: 18,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: AppSpacing.xxl),
 
-              // 3. FORMULAIRE
-              // Prénom
-              Text("PRÉNOM", style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
+              // ── Prénom ─────────────────────────────────────────────
+              Text('PRÉNOM',
+                  style: tt.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2)),
+              const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _firstNameController,
-                textCapitalization: TextCapitalization.words, // Majuscule auto
-                decoration: const InputDecoration(
-                  hintText: "Daril",
-                  prefixIcon: Icon(Icons.person_outline),
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  hintText: 'Prénom',
+                  prefixIcon: const PhosphorIcon(
+                      PhosphorIconsRegular.user,
+                      size: 18,
+                      color: AppColors.textSecondary),
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
 
-              // Nom
-              Text("NOM", style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
+              // ── Nom ────────────────────────────────────────────────
+              Text('NOM',
+                  style: tt.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2)),
+              const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _lastNameController,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  hintText: "...",
-                  prefixIcon: Icon(Icons.person_outline),
+                decoration: InputDecoration(
+                  hintText: 'Nom de famille',
+                  prefixIcon: const PhosphorIcon(
+                      PhosphorIconsRegular.user,
+                      size: 18,
+                      color: AppColors.textSecondary),
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: AppSpacing.xxl),
 
-              // 4. CARTE PERMISSION (Location)
-              // C'est ici qu'on respecte ta "Clarté Domestique" : pas de popup agressive
+              // ── Carte localisation ─────────────────────────────────
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  color: AppColors.surface,
+                  borderRadius:
+                      BorderRadius.circular(AppSpacing.radiusLg),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
-                        color: theme.primaryColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
+                        color: AppColors.completedBg,
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusMd),
                       ),
-                      child: Icon(Icons.location_on, color: theme.primaryColor),
+                      child: const PhosphorIcon(
+                          PhosphorIconsRegular.mapPin,
+                          color: AppColors.primary,
+                          size: 20),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: AppSpacing.lg),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Text('Localisation',
+                              style: tt.titleSmall),
                           Text(
-                            "Localisation",
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            "Pour voir les machines autour de vous.",
-                            style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+                            'Pour voir les machines autour de vous.',
+                            style: tt.bodySmall,
                           ),
                         ],
                       ),
                     ),
                     Switch(
                       value: _isLocationEnabled,
-                      activeThumbColor: theme.primaryColor.withValues(alpha: 1),
-                      onChanged: (value) {
-                        setState(() {
-                          _isLocationEnabled = value;
-                        });
-                      },
+                      activeThumbColor: AppColors.primary,
+                      onChanged: (value) =>
+                          setState(() => _isLocationEnabled = value),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: AppSpacing.xxl),
 
-              // 5. BOUTON FINAL
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () async {
-                    // Enregistrement dans Firestore
-                    try {
-                      final user = FirebaseAuth.instance.currentUser;
-                      if (user != null) {
-                        final newUser = UserModel(
-                          uid: user.uid,
-                          firstName: _firstNameController.text.trim(),
-                          lastName: _lastNameController.text.trim(),
-                          phoneNumber: user.phoneNumber ?? '',
-                        );
-                        await UserRepository().createUser(newUser);
-                      }
-                      if (context.mounted) {
-                        context.go('/home'); 
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Erreur: $e')),
-                        );
-                      }
+              // ── CTA ────────────────────────────────────────────────
+              FilledButton(
+                onPressed: () async {
+                  try {
+                    final user = FirebaseAuth.instance.currentUser;
+                    if (user != null) {
+                      final newUser = UserModel(
+                        uid: user.uid,
+                        firstName: _firstNameController.text.trim(),
+                        lastName: _lastNameController.text.trim(),
+                        phoneNumber: user.phoneNumber ?? '',
+                        email: user.email,
+                      );
+                      await UserRepository().createUser(newUser);
                     }
-                  },
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: const Text("C'est parti !"),
+                    if (context.mounted) {
+                      context.go('/home');
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Erreur: $e')),
+                      );
+                    }
+                  }
+                },
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.lg),
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusMd)),
                 ),
+                child: const Text("C'est parti !"),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xl),
             ],
           ),
         ),

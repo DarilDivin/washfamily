@@ -57,6 +57,7 @@ dependencies:
   google_maps_flutter_android: ^2.19.6
   image_picker: ^1.1.2
   firebase_storage: ^13.1.0
+  phosphor_flutter: ^2.1.0
 
 dev_dependencies:
   flutter_test:

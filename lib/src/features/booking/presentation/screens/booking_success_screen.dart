@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../domain/models/reservation_model.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 /// Étape 3 du tunnel : Confirmation avec animation de succès.
 class BookingSuccessScreen extends StatefulWidget {
@@ -27,8 +29,10 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _scaleAnim = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
-    _fadeAnim = CurvedAnimation(parent: _controller, curve: const Interval(0.4, 1.0));
+    _scaleAnim =
+        CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
+    _fadeAnim = CurvedAnimation(
+        parent: _controller, curve: const Interval(0.4, 1.0));
     _controller.forward();
   }
 
@@ -40,91 +44,91 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final r = widget.reservation;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBackground,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             children: [
               const Spacer(),
 
-              // ── Animation checkmark ──────────────────────────────
+              // ── Animation checkmark ────────────────────────────────
               ScaleTransition(
                 scale: _scaleAnim,
                 child: Container(
-                  width: 120, height: 120,
-                  decoration: BoxDecoration(
+                  width: 120,
+                  height: 120,
+                  decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF16A34A), Color(0xFF22C55E)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF16A34A).withValues(alpha: 0.35),
-                        blurRadius: 32,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
+                    color: AppColors.success,
                   ),
-                  child: const Icon(Icons.check_rounded, size: 60, color: Colors.white),
+                  child: const PhosphorIcon(
+                    PhosphorIconsRegular.check,
+                    size: 56,
+                    color: AppColors.surface,
+                  ),
                 ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: AppSpacing.xxl),
 
               FadeTransition(
                 opacity: _fadeAnim,
                 child: Column(children: [
-                  Text(
-                    'Demande envoyée !',
-                    style: GoogleFonts.inter(fontSize: 26, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A)),
-                  ),
-                  const SizedBox(height: 8),
+                  Text('Demande envoyée !', style: tt.headlineLarge),
+                  const SizedBox(height: AppSpacing.sm),
                   Text(
                     'Le propriétaire a reçu votre demande. Vous serez notifié dès confirmation.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
+                    style: tt.bodyMedium
+                        ?.copyWith(color: AppColors.textSecondary),
                   ),
                 ]),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: AppSpacing.xxl),
 
-              // ── Récapitulatif réservation ────────────────────────
+              // ── Récapitulatif ──────────────────────────────────────
               FadeTransition(
                 opacity: _fadeAnim,
                 child: Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 16)],
+                    color: AppColors.surface,
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusXl),
+                    border: Border.all(color: AppColors.border),
                   ),
                   child: Column(
                     children: [
-                      _SuccessRow(icon: Icons.local_laundry_service_rounded, label: 'Machine', value: r.machineBrand),
-                      const Divider(height: 20, color: Color(0xFFF1F5F9)),
                       _SuccessRow(
-                        icon: Icons.calendar_today_outlined,
+                          icon: PhosphorIconsRegular.washingMachine,
+                          label: 'Machine',
+                          value: r.machineBrand),
+                      Divider(height: AppSpacing.xl, color: AppColors.border),
+                      _SuccessRow(
+                        icon: PhosphorIconsRegular.calendarBlank,
                         label: 'Date',
-                        value: DateFormat('EEE d MMM yyyy', 'fr').format(r.startTime),
+                        value: DateFormat('EEE d MMM yyyy', 'fr')
+                            .format(r.startTime),
                       ),
-                      const Divider(height: 20, color: Color(0xFFF1F5F9)),
+                      Divider(height: AppSpacing.xl, color: AppColors.border),
                       _SuccessRow(
-                        icon: Icons.access_time_rounded,
+                        icon: PhosphorIconsRegular.clock,
                         label: 'Créneau',
-                        value: '${DateFormat('HH:mm').format(r.startTime)} → ${DateFormat('HH:mm').format(r.endTime)}',
+                        value:
+                            '${DateFormat('HH:mm').format(r.startTime)} → ${DateFormat('HH:mm').format(r.endTime)}',
                       ),
-                      const Divider(height: 20, color: Color(0xFFF1F5F9)),
+                      Divider(height: AppSpacing.xl, color: AppColors.border),
                       _SuccessRow(
-                        icon: Icons.pending_rounded,
+                        icon: PhosphorIconsRegular.hourglass,
                         label: 'Statut',
                         value: 'En attente',
-                        valueColor: const Color(0xFFD97706),
+                        valueColor: AppColors.pendingText,
                       ),
                     ],
                   ),
@@ -133,26 +137,29 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
 
               const Spacer(),
 
-              // ── Actions ──────────────────────────────────────────
+              // ── Actions ────────────────────────────────────────────
               FadeTransition(
                 opacity: _fadeAnim,
                 child: Column(children: [
                   FilledButton(
                     onPressed: () => context.go('/bookings'),
                     style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      backgroundColor: const Color(0xFF2563EB),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.lg),
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusMd)),
                       minimumSize: const Size(double.infinity, 0),
                     ),
-                    child: Text('Voir mes réservations',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
+                    child: const Text('Voir mes réservations'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.md),
                   TextButton(
                     onPressed: () => context.go('/home'),
-                    child: Text('Retour à l\'accueil',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: const Color(0xFF64748B))),
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary),
+                    child: const Text('Retour à l\'accueil'),
                   ),
                 ]),
               ),
@@ -165,19 +172,29 @@ class _BookingSuccessScreenState extends State<BookingSuccessScreen>
 }
 
 class _SuccessRow extends StatelessWidget {
-  final IconData icon;
+  final PhosphorIconData icon;
   final String label;
   final String value;
   final Color? valueColor;
 
-  const _SuccessRow({required this.icon, required this.label, required this.value, this.valueColor});
+  const _SuccessRow(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      this.valueColor});
 
   @override
-  Widget build(BuildContext context) => Row(children: [
-    Icon(icon, size: 16, color: const Color(0xFF94A3B8)),
-    const SizedBox(width: 10),
-    Text(label, style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B))),
-    const Spacer(),
-    Text(value, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13, color: valueColor ?? const Color(0xFF0F172A))),
-  ]);
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Row(children: [
+      PhosphorIcon(icon, size: 15, color: AppColors.textSecondary),
+      const SizedBox(width: AppSpacing.sm),
+      Text(label, style: tt.bodySmall),
+      const Spacer(),
+      Text(value,
+          style: tt.bodySmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: valueColor ?? AppColors.textPrimary)),
+    ]);
+  }
 }

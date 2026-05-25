@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Utilisateurs ────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Laveries ────────────────────────────────────────────────────────────
+    match /laundries/{laundryId} {
+      allow read: if request.auth != null;
+
+      // Un propriétaire ne peut créer qu'UNE seule laverie
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.ownerId
+        && !exists(/databases/$(database)/documents/laundries/$(request.auth.uid));
+
+      allow update, delete: if request.auth != null
+        && request.auth.uid == resource.data.ownerId;
+
+      // ── Machines (sous-collection) ───────────────────────────────────────
+      match /machines/{machineId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/laundries/$(laundryId)).data.ownerId;
+      }
+
+      // ── Produits (sous-collection) ───────────────────────────────────────
+      match /products/{productId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/laundries/$(laundryId)).data.ownerId;
+      }
+    }
+
+    // ── Réservations ────────────────────────────────────────────────────────
+    match /reservations/{reservationId} {
+      // get : lecture d'un document individuel → restreint à owner/renter
+      allow get: if request.auth != null
+        && (request.auth.uid == resource.data.ownerId
+         || request.auth.uid == resource.data.renterId);
+      // list : requêtes de collection (vérification de disponibilité, etc.)
+      // → tout utilisateur authentifié (Firestore ne peut pas filtrer par ressource)
+      allow list: if request.auth != null;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.renterId;
+      allow update: if request.auth != null
+        && (request.auth.uid == resource.data.ownerId
+         || request.auth.uid == resource.data.renterId);
+    }
+
+    // ── Conversations ────────────────────────────────────────────────────────
+    match /conversations/{conversationId} {
+      // get  : lecture d'un document individuel → restreint aux participants
+      allow get: if request.auth != null
+        && request.auth.uid in resource.data.participantIds;
+      // list : requêtes de collection (getConversationByReservationId, etc.)
+      // → tout utilisateur authentifié (Firestore ne peut pas vérifier participantIds sur une query)
+      allow list: if request.auth != null;
+      // create : création initiale par le système lors d'une confirmation
+      allow create: if request.auth != null;
+      // update : seuls les participants peuvent modifier (ex: unreadCount)
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.participantIds;
+      allow delete: if false;
+    }
+
+    // ── Messages (collection racine — MessagingRepository utilise db.collection('messages')) ──
+    match /messages/{messageId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Plans d'abonnement (lecture seule) ────────────────────────────────────
+    match /subscriptions/{planId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ── Abonnements utilisateur ───────────────────────────────────────────────
+    match /user_subscriptions/{subId} {
+      allow read: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      allow delete: if false;
+    }
+
+    // ── Avis ─────────────────────────────────────────────────────────────────
+    match /reviews/{reviewId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.renterId;
+      allow update, delete: if request.auth != null
+        && request.auth.uid == resource.data.renterId;
+    }
+
+    // ── Notifications ─────────────────────────────────────────────────────────
+    match /notifications/{notificationId} {
+      // read / update / delete : uniquement le destinataire
+      allow read: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      allow update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      // create : tout utilisateur authentifié peut envoyer une notification
+      // (le système envoie au locataire/propriétaire depuis le client)
+      allow create: if request.auth != null;
+    }
+  }
+}

@@ -57,7 +57,7 @@ class _AdminSubscriptionsScreenState
       final q = _search.toLowerCase();
       final matchSearch = q.isEmpty ||
           '${u.firstName} ${u.lastName}'.toLowerCase().contains(q) ||
-          u.phoneNumber.contains(q);
+          u.contact.toLowerCase().contains(q);
 
       return matchFilter && matchSearch;
     }).toList();
@@ -267,7 +267,7 @@ class _UserTile extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF0F172A))),
                   const SizedBox(height: 2),
-                  Text(user.phoneNumber,
+                  Text(user.contact.isNotEmpty ? user.contact : '—',
                       style: const TextStyle(
                           fontSize: 12, color: Color(0xFF94A3B8))),
                 ],
@@ -447,7 +447,7 @@ class _UserActionsSheetState extends State<_UserActionsSheet> {
               style: const TextStyle(
                   fontSize: 16, fontWeight: FontWeight.w700,
                   color: Color(0xFF0F172A))),
-          Text(widget.user.phoneNumber,
+          Text(widget.user.contact.isNotEmpty ? widget.user.contact : '—',
               style: const TextStyle(
                   fontSize: 13, color: Color(0xFF94A3B8))),
           const SizedBox(height: 24),

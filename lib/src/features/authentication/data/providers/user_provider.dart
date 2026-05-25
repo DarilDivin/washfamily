@@ -5,19 +5,22 @@ import '../../domain/models/user_model.dart';
 import '../../../subscriptions/data/subscription_repository.dart';
 
 /// Provider global pour l'utilisateur connecté.
-/// Vérifie automatiquement l'expiration de l'abonnement à chaque lecture.
-/// Utilisé partout en remplacement des appels directs à UserRepository().getUser().
+/// Basé sur un Stream Firestore — l'UI se reconstruit automatiquement
+/// dès qu'un champ change (quota, rôle, abonnement…).
 final currentUserProvider =
-    AsyncNotifierProvider<CurrentUserNotifier, UserModel?>(
+    StreamNotifierProvider<CurrentUserNotifier, UserModel?>(
   CurrentUserNotifier.new,
 );
 
-class CurrentUserNotifier extends AsyncNotifier<UserModel?> {
+class CurrentUserNotifier extends StreamNotifier<UserModel?> {
   @override
-  Future<UserModel?> build() async {
+  Stream<UserModel?> build() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return null;
-    await SubscriptionRepository().checkAndResetIfExpired(uid);
-    return UserRepository().getUser(uid);
+    if (uid == null) return Stream.value(null);
+
+    // Vérification d'expiration en fire-and-forget : ne bloque pas le stream.
+    SubscriptionRepository().checkAndResetIfExpired(uid).ignore();
+
+    return UserRepository().streamUser(uid);
   }
 }

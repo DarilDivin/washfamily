@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../domain/models/reservation_model.dart';
 import '../../data/repositories/firestore_reservation_repository.dart';
 import '../../../machines_map/domain/models/machine_model.dart';
+import '../../../machines_map/domain/models/wash_program_model.dart';
+import '../../../laundries/domain/models/laundry_product_model.dart';
+import '../../../laundries/data/repositories/laundry_product_repository.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 /// Étape 2 du tunnel : Récapitulatif et confirmation de la réservation.
 class BookingSummaryScreen extends StatefulWidget {
@@ -28,14 +33,15 @@ class BookingSummaryScreen extends StatefulWidget {
 
 class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   final _repo = FirestoreReservationRepository();
-  final _noteCtrl = TextEditingController();
+  final _productRepo = LaundryProductRepository();
+  final _washInstructionsCtrl = TextEditingController();
+  String? _selectedProgramId;
+  final Set<String> _selectedProductIds = {};
   bool _isLoading = false;
-
-  static const _primaryColor = Color(0xFF2563EB);
 
   @override
   void dispose() {
-    _noteCtrl.dispose();
+    _washInstructionsCtrl.dispose();
     super.dispose();
   }
 
@@ -43,14 +49,15 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vous devez être connecté pour réserver.')),
+        const SnackBar(
+            content: Text('Vous devez être connecté pour réserver.')),
       );
       return;
     }
 
-    // Vérification de disponibilité (avant de créer)
     setState(() => _isLoading = true);
     final isAvailable = await _repo.checkAvailability(
+      laundryId: widget.machine.laundryId,
       machineId: widget.machine.id,
       start: widget.startTime,
       end: widget.endTime,
@@ -61,8 +68,9 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ Ce créneau vient d\'être réservé. Choisissez-en un autre.'),
-            backgroundColor: Colors.orange,
+            content: Text(
+                '⚠️ Ce créneau vient d\'être réservé. Choisissez-en un autre.'),
+            backgroundColor: AppColors.warning,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -71,21 +79,41 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     }
 
     try {
+      final products = await _productRepo
+          .streamProducts(widget.machine.laundryId)
+          .first;
+      final selected = products
+          .where((p) => _selectedProductIds.contains(p.id))
+          .toList();
+      final productsTotal =
+          selected.fold<double>(0, (sum, p) => sum + p.pricePerUnit);
+
       final reservation = ReservationModel(
         id: '',
         machineId: widget.machine.id,
+        laundryId: widget.machine.laundryId,
         machineBrand: widget.machine.brand,
         machineAddress: widget.machine.address,
         ownerId: widget.machine.ownerId,
         renterId: user.uid,
         startTime: widget.startTime,
         endTime: widget.endTime,
-        totalPrice: widget.price,
+        totalPrice: widget.price + productsTotal,
         status: 'PENDING',
-        renterNote: _noteCtrl.text.isNotEmpty ? _noteCtrl.text : null,
+        washInstructions: _washInstructionsCtrl.text.isNotEmpty
+            ? _washInstructionsCtrl.text.trim()
+            : null,
+        selectedProgramId: _selectedProgramId,
+        selectedProducts: selected
+            .map((p) => ReservationProduct(
+                  productId: p.id,
+                  name: p.name,
+                  pricePerUnit: p.pricePerUnit,
+                ))
+            .toList(),
+        productsTotal: productsTotal,
       );
 
-      // createReservation retourne maintenant la réservation avec son vrai ID Firestore
       final created = await _repo.createReservation(reservation);
 
       if (mounted) {
@@ -93,153 +121,365 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
         context.pushReplacement('/bookings/success', extra: created);
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      final msg = e.toString();
+      if (msg.contains('quota_exceeded') ||
+          msg.contains('subscription_required') ||
+          msg.contains('subscription_expired')) {
+        _showQuotaDialog();
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Erreur : $e'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating),
         );
       }
     }
   }
 
+  void _showQuotaDialog() {
+    final tt = Theme.of(context).textTheme;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
+        title: Text('Quota atteint', style: tt.titleMedium),
+        content: Text(
+          'Vous avez atteint votre limite de réservations ce mois-ci.\n'
+          'Passez à un plan supérieur pour continuer.',
+          style: tt.bodyMedium?.copyWith(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Annuler',
+                style: tt.labelLarge
+                    ?.copyWith(color: AppColors.textSecondary)),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.push('/subscriptions');
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppSpacing.radiusMd)),
+            ),
+            child: Text('Voir les plans',
+                style: tt.labelLarge
+                    ?.copyWith(color: AppColors.surface)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final duration = widget.endTime.difference(widget.startTime);
+    final machine = widget.machine;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        title: Text('Récapitulatif', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.white,
+        title: Text('Récapitulatif', style: tt.titleLarge),
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        foregroundColor: const Color(0xFF0F172A),
+        foregroundColor: AppColors.textPrimary,
         surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          // ── Étapes visuelles ──────────────────────────────────────
+          // ── Étapes visuelles ───────────────────────────────────────
           _StepIndicator(currentStep: 1),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
 
-          // ── Carte Machine ─────────────────────────────────────────
+          // ── Machine ────────────────────────────────────────────────
           _InfoCard(
             title: 'MACHINE',
             child: Row(children: [
               Container(
-                width: 52, height: 52,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)]),
-                  borderRadius: BorderRadius.circular(14),
+                  color: AppColors.completedBg,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                 ),
-                child: const Icon(Icons.local_laundry_service_rounded, color: Colors.white, size: 28),
+                child: const PhosphorIcon(
+                    PhosphorIconsRegular.washingMachine,
+                    color: AppColors.primary,
+                    size: 26),
               ),
-              const SizedBox(width: 14),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(widget.machine.brand, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
-                if (widget.machine.address != null)
-                  Text(widget.machine.address!, style: GoogleFonts.inter(color: const Color(0xFF64748B), fontSize: 12)),
-                Row(children: [
-                  const Icon(Icons.water_drop_outlined, size: 12, color: Color(0xFF94A3B8)),
-                  const SizedBox(width: 4),
-                  Text('${widget.machine.capacityKg} kg', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B))),
-                ]),
-              ])),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(machine.brand, style: tt.titleSmall),
+                    if (machine.address != null)
+                      Text(machine.address!, style: tt.bodySmall),
+                    Row(children: [
+                      const PhosphorIcon(PhosphorIconsRegular.drop,
+                          size: 11, color: AppColors.textSecondary),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text('${machine.capacityKg} kg',
+                          style: tt.bodySmall),
+                    ]),
+                  ])),
             ]),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
 
-          // ── Carte Créneau ─────────────────────────────────────────
+          // ── Créneau ────────────────────────────────────────────────
           _InfoCard(
             title: 'CRÉNEAU',
             child: Column(children: [
               _DetailRow(
-                icon: Icons.calendar_today_outlined,
+                icon: PhosphorIconsRegular.calendarBlank,
                 label: 'Date',
-                value: DateFormat('EEEE d MMMM yyyy', 'fr').format(widget.startTime),
+                value: DateFormat('EEEE d MMMM yyyy', 'fr')
+                    .format(widget.startTime),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               _DetailRow(
-                icon: Icons.access_time_rounded,
+                icon: PhosphorIconsRegular.clock,
                 label: 'Horaire',
-                value: '${DateFormat('HH:mm').format(widget.startTime)} → ${DateFormat('HH:mm').format(widget.endTime)}',
+                value:
+                    '${DateFormat('HH:mm').format(widget.startTime)} → ${DateFormat('HH:mm').format(widget.endTime)}',
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               _DetailRow(
-                icon: Icons.timelapse_rounded,
+                icon: PhosphorIconsRegular.timer,
                 label: 'Durée',
-                value: '${duration.inHours}h${duration.inMinutes.remainder(60).toString().padLeft(2, '0')}',
+                value:
+                    '${duration.inHours}h${duration.inMinutes.remainder(60).toString().padLeft(2, '0')}',
               ),
             ]),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
 
-          // ── Carte Prix ────────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFBFDBFE)),
-            ),
-            child: Row(children: [
-              const Icon(Icons.euro_rounded, color: _primaryColor, size: 20),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Prix total', style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: _primaryColor))),
-              Text(
-                '${widget.price.toStringAsFixed(2)} €',
-                style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w900, color: _primaryColor),
+          // ── Programme de lavage ────────────────────────────────────
+          if (machine.programs.isNotEmpty) ...[
+            _InfoCard(
+              title: 'PROGRAMME DE LAVAGE',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Choisissez le programme adapté à votre linge.',
+                    style: tt.bodySmall
+                        ?.copyWith(color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: machine.programs
+                        .map((p) => _ProgramChip(
+                              program: p,
+                              selected: _selectedProgramId == p.id,
+                              onTap: () => setState(() {
+                                _selectedProgramId = _selectedProgramId == p.id
+                                    ? null
+                                    : p.id;
+                              }),
+                            ))
+                        .toList(),
+                  ),
+                ],
               ),
-            ]),
-          ),
-          const SizedBox(height: 20),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
 
-          // ── Note pour le propriétaire ─────────────────────────────
-          Text('Note pour le propriétaire (optionnel)',
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
-            ),
-            child: TextField(
-              controller: _noteCtrl,
-              maxLines: 3,
-              maxLength: 200,
-              decoration: InputDecoration(
-                hintText: 'Ex : J\'arriverai à 10h pile, code de la porte ?',
-                hintStyle: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 13),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.all(16),
+          // ── Instructions de lavage ─────────────────────────────────
+          _InfoCard(
+            title: 'INSTRUCTIONS DE LAVAGE (OPTIONNEL)',
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.inputBackground,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               ),
-              style: GoogleFonts.inter(fontSize: 14),
+              child: TextField(
+                controller: _washInstructionsCtrl,
+                maxLines: 3,
+                maxLength: 300,
+                decoration: InputDecoration(
+                  hintText:
+                      'Ex : Matières délicates, tache sur la manche droite…',
+                  hintStyle: tt.bodySmall
+                      ?.copyWith(color: AppColors.textSecondary),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.all(AppSpacing.md),
+                  counterStyle: tt.bodySmall
+                      ?.copyWith(color: AppColors.textSecondary),
+                ),
+                style: tt.bodyMedium,
+              ),
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
+
+          // ── Produits ───────────────────────────────────────────────
+          StreamBuilder<List<LaundryProductModel>>(
+            stream: _productRepo
+                .streamProducts(widget.machine.laundryId),
+            builder: (context, snap) {
+              final products = snap.data ?? [];
+              if (products.isEmpty) return const SizedBox.shrink();
+
+              final byCategory = <String, List<LaundryProductModel>>{
+                'DETERGENT': [],
+                'SOFTENER': [],
+                'ACCESSORY': [],
+              };
+              for (final p in products) {
+                byCategory[p.category]?.add(p);
+              }
+              const labels = {
+                'DETERGENT': 'Lessives',
+                'SOFTENER': 'Adoucissants',
+                'ACCESSORY': 'Accessoires',
+              };
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _InfoCard(
+                    title: 'PRODUITS EN OPTION',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: byCategory.entries
+                          .where((e) => e.value.isNotEmpty)
+                          .expand((e) => [
+                                Text(labels[e.key]!,
+                                    style: tt.labelSmall?.copyWith(
+                                        color: AppColors.textSecondary,
+                                        fontWeight: FontWeight.w600)),
+                                const SizedBox(height: AppSpacing.xs),
+                                ...e.value.map((p) =>
+                                    _ProductSelectionTile(
+                                      product: p,
+                                      selected: _selectedProductIds
+                                          .contains(p.id),
+                                      onChanged: p.isInStock
+                                          ? (val) => setState(() {
+                                                if (val == true) {
+                                                  _selectedProductIds
+                                                      .add(p.id);
+                                                } else {
+                                                  _selectedProductIds
+                                                      .remove(p.id);
+                                                }
+                                              })
+                                          : null,
+                                    )),
+                                const SizedBox(height: AppSpacing.md),
+                              ])
+                          .toList(),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+              );
+            },
+          ),
+
+          // ── Prix total ─────────────────────────────────────────────
+          StreamBuilder<List<LaundryProductModel>>(
+            stream: _productRepo.streamProducts(widget.machine.laundryId),
+            builder: (context, snap) {
+              final products = snap.data ?? [];
+              final productsTotal = products
+                  .where((p) => _selectedProductIds.contains(p.id))
+                  .fold<double>(0, (s, p) => s + p.pricePerUnit);
+              final total = widget.price + productsTotal;
+
+              return Container(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: BoxDecoration(
+                  color: AppColors.completedBg,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  children: [
+                    _PriceRow(
+                        label: 'Prix lavage',
+                        value: widget.price,
+                        tt: tt),
+                    if (productsTotal > 0) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      _PriceRow(
+                          label: '+ Produits',
+                          value: productsTotal,
+                          tt: tt),
+                      const Divider(
+                          height: AppSpacing.lg, color: AppColors.border),
+                    ] else
+                      const SizedBox(height: AppSpacing.sm),
+                    Row(children: [
+                      const PhosphorIcon(PhosphorIconsRegular.currencyEur,
+                          color: AppColors.primary, size: 20),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text('Total',
+                            style: tt.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary)),
+                      ),
+                      Text(
+                        '${total.toStringAsFixed(2)} €',
+                        style:
+                            tt.titleLarge?.copyWith(color: AppColors.primary),
+                      ),
+                    ]),
+                  ],
+                ),
+              );
+            },
+          ),
+
           const SizedBox(height: 80),
         ],
       ),
 
-      // ── CTA Confirmer ─────────────────────────────────────────────
+      // ── CTA Confirmer ──────────────────────────────────────────────
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
           child: FilledButton(
             onPressed: _isLoading ? null : _confirm,
             style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              backgroundColor: _primaryColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding:
+                  const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppSpacing.radiusMd)),
             ),
             child: _isLoading
-                ? const SizedBox(width: 22, height: 22,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    const Icon(Icons.check_rounded),
-                    const SizedBox(width: 8),
-                    Text('Confirmer la réservation',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ]),
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        color: AppColors.surface, strokeWidth: 2.5))
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const PhosphorIcon(PhosphorIconsRegular.check,
+                          size: 18),
+                      const SizedBox(width: AppSpacing.sm),
+                      const Text('Confirmer la réservation'),
+                    ]),
           ),
         ),
       ),
@@ -247,7 +487,78 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   }
 }
 
-// ── Sous-widgets ──────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _ProgramChip
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProgramChip extends StatelessWidget {
+  final WashProgram program;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ProgramChip({
+    required this.program,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+          border: Border.all(
+              color: selected ? AppColors.primary : AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            PhosphorIcon(PhosphorIconsRegular.thermometer,
+                size: 13,
+                color: selected
+                    ? AppColors.surface
+                    : AppColors.textSecondary),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              '${program.name} · ${program.temperatureCelsius}°C',
+              style: tt.labelSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color:
+                    selected ? AppColors.surface : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              '${program.durationMinutes}min',
+              style: tt.labelSmall?.copyWith(
+                color: selected
+                    ? AppColors.surface.withValues(alpha: 0.75)
+                    : AppColors.textSecondary,
+              ),
+            ),
+            if (program.isDelicate) ...[
+              const SizedBox(width: AppSpacing.xs),
+              PhosphorIcon(PhosphorIconsRegular.leaf,
+                  size: 11,
+                  color: selected ? AppColors.surface : AppColors.primary),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _StepIndicator
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _StepIndicator extends StatelessWidget {
   final int currentStep;
@@ -270,24 +581,41 @@ class _Step extends StatelessWidget {
   final String label;
   final bool active;
   final bool done;
-  const _Step({required this.n, required this.label, this.active = false, this.done = false});
+  const _Step(
+      {required this.n,
+      required this.label,
+      this.active = false,
+      this.done = false});
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final highlight = active || done;
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Container(
-        width: 32, height: 32,
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
-          color: (active || done) ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+          color: highlight ? AppColors.primary : AppColors.border,
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,
         child: done
-            ? const Icon(Icons.check, color: Colors.white, size: 16)
-            : Text('$n', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: (active || done) ? Colors.white : const Color(0xFF94A3B8))),
+            ? const PhosphorIcon(PhosphorIconsRegular.check,
+                color: AppColors.surface, size: 16)
+            : Text('$n',
+                style: tt.labelLarge?.copyWith(
+                    color: highlight
+                        ? AppColors.surface
+                        : AppColors.textSecondary)),
       ),
-      const SizedBox(height: 4),
-      Text(label, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: (active || done) ? const Color(0xFF2563EB) : const Color(0xFF94A3B8))),
+      const SizedBox(height: AppSpacing.xs),
+      Text(label,
+          style: tt.labelSmall?.copyWith(
+              fontSize: 10,
+              color: highlight
+                  ? AppColors.primary
+                  : AppColors.textSecondary)),
     ]);
   }
 }
@@ -298,13 +626,17 @@ class _StepLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-    child: Container(
-      height: 2,
-      margin: const EdgeInsets.only(bottom: 14),
-      color: active ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
-    ),
-  );
+        child: Container(
+          height: 2,
+          margin: const EdgeInsets.only(bottom: 14),
+          color: active ? AppColors.primary : AppColors.border,
+        ),
+      );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _InfoCard
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _InfoCard extends StatelessWidget {
   final String title;
@@ -312,38 +644,186 @@ class _InfoCard extends StatelessWidget {
   const _InfoCard({required this.title, required this.child});
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
-    ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: const Color(0xFF94A3B8), letterSpacing: 1.5)),
-      const SizedBox(height: 12),
-      child,
-    ]),
-  );
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title,
+            style: tt.labelSmall?.copyWith(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+                letterSpacing: 1.5)),
+        const SizedBox(height: AppSpacing.md),
+        child,
+      ]),
+    );
+  }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// _DetailRow
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _DetailRow extends StatelessWidget {
-  final IconData icon;
+  final PhosphorIconData icon;
   final String label;
   final String value;
-  const _DetailRow({required this.icon, required this.label, required this.value});
+  const _DetailRow(
+      {required this.icon, required this.label, required this.value});
 
   @override
-  Widget build(BuildContext context) => Row(children: [
-    Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
-      child: Icon(icon, size: 16, color: const Color(0xFF2563EB)),
-    ),
-    const SizedBox(width: 12),
-    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF94A3B8))),
-      Text(value, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13, color: const Color(0xFF0F172A))),
-    ])),
-  ]);
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Row(children: [
+      Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+            color: AppColors.inputBackground,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
+        child: PhosphorIcon(icon, size: 15, color: AppColors.primary),
+      ),
+      const SizedBox(width: AppSpacing.md),
+      Expanded(
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+            Text(label, style: tt.bodySmall),
+            Text(value,
+                style: tt.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary)),
+          ])),
+    ]);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _ProductSelectionTile
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProductSelectionTile extends StatelessWidget {
+  final LaundryProductModel product;
+  final bool selected;
+  final ValueChanged<bool?>? onChanged;
+
+  const _ProductSelectionTile({
+    required this.product,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final outOfStock = !product.isInStock;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border),
+      ),
+      child: Row(
+        children: [
+          // Photo ou icône catégorie
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+              child: product.photoUrl != null
+                  ? Image.network(product.photoUrl!,
+                      width: 40, height: 40, fit: BoxFit.cover)
+                  : Container(
+                      width: 40,
+                      height: 40,
+                      color: AppColors.inputBackground,
+                      child: Center(
+                        child: PhosphorIcon(
+                          product.category == 'ACCESSORY'
+                              ? PhosphorIconsRegular.package
+                              : PhosphorIconsRegular.drop,
+                          size: 20,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(product.name,
+                    style: tt.bodyMedium?.copyWith(
+                        color: outOfStock
+                            ? AppColors.textSecondary
+                            : AppColors.textPrimary)),
+                Text(
+                  '+${product.pricePerUnit.toStringAsFixed(2)} € / ${product.unit}',
+                  style: tt.labelSmall
+                      ?.copyWith(color: AppColors.textSecondary),
+                ),
+                if (outOfStock)
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.cancelledBg,
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusFull),
+                    ),
+                    child: Text('Rupture de stock',
+                        style: tt.labelSmall?.copyWith(
+                            color: AppColors.cancelledText,
+                            fontWeight: FontWeight.w600)),
+                  ),
+              ],
+            ),
+          ),
+          Checkbox(
+            value: selected,
+            onChanged: onChanged,
+            activeColor: AppColors.primary,
+            side: const BorderSide(color: AppColors.border),
+            visualDensity: VisualDensity.compact,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _PriceRow
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PriceRow extends StatelessWidget {
+  final String label;
+  final double value;
+  final TextTheme tt;
+
+  const _PriceRow({required this.label, required this.value, required this.tt});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: tt.bodyMedium?.copyWith(color: AppColors.textSecondary)),
+        Text('${value.toStringAsFixed(2)} €', style: tt.bodyMedium),
+      ],
+    );
+  }
 }

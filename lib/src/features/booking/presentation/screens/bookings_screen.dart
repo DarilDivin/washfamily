@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../domain/models/reservation_model.dart';
+import '../../domain/models/reservation_status_helper.dart';
 import '../../data/repositories/firestore_reservation_repository.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({super.key});
@@ -12,9 +16,14 @@ class BookingsScreen extends StatefulWidget {
   State<BookingsScreen> createState() => _BookingsScreenState();
 }
 
-class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProviderStateMixin {
+class _BookingsScreenState extends State<BookingsScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _repo = FirestoreReservationRepository();
+
+  static const _activeStatuses = {
+    'PENDING', 'CONFIRMED', 'PICKED_UP', 'IN_PROGRESS', 'READY'
+  };
 
   @override
   void initState() {
@@ -30,41 +39,45 @@ class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text('Mes Réservations', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 22)),
-        backgroundColor: Colors.white,
+        title: Text('Mes Réservations', style: tt.titleLarge),
+        backgroundColor: AppColors.surface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
             child: Container(
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.inputBackground,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
               ),
               child: TabBar(
                 controller: _tabController,
                 indicatorSize: TabBarIndicatorSize.tab,
                 dividerColor: Colors.transparent,
                 indicator: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.white,
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2))],
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  color: AppColors.surface,
+                  border: Border.all(color: AppColors.border),
                 ),
-                labelColor: const Color(0xFF0F172A),
-                unselectedLabelColor: const Color(0xFF64748B),
-                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-                unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13),
-                padding: const EdgeInsets.all(4),
+                labelColor: AppColors.textPrimary,
+                unselectedLabelColor: AppColors.textSecondary,
+                labelStyle:
+                    tt.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                unselectedLabelStyle: tt.labelLarge,
+                padding: const EdgeInsets.all(AppSpacing.xs),
                 tabs: const [
-                  Tab(text: 'À venir'),
-                  Tab(text: 'Passées'),
+                  Tab(text: 'En cours'),
+                  Tab(text: 'Terminées'),
                   Tab(text: 'Annulées'),
                 ],
               ),
@@ -77,15 +90,12 @@ class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProvid
         builder: (context, authSnapshot) {
           final uid = authSnapshot.data?.uid;
 
-          if (authSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+          if (authSnapshot.connectionState == ConnectionState.waiting ||
+              uid == null) {
+            return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary));
           }
 
-          if (uid == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          // Lance l'auto-cancel ghostings et les rappels une seule fois
           Future.microtask(() async {
             await _repo.autoCancelGhostings(uid, isOwner: false);
             await _repo.checkAndSendReminders(uid);
@@ -95,24 +105,38 @@ class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProvid
             stream: _repo.streamReservationsByRenter(uid),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(
+                    child:
+                        CircularProgressIndicator(color: AppColors.primary));
               }
               if (snapshot.hasError) {
                 return _ErrorWidget(message: snapshot.error.toString());
               }
 
               final all = snapshot.data ?? [];
-              final now = DateTime.now();
-              final upcoming  = all.where((r) => r.startTime.isAfter(now) && r.status != 'CANCELLED').toList();
-              final past      = all.where((r) => r.startTime.isBefore(now) && r.status != 'CANCELLED').toList();
-              final cancelled = all.where((r) => r.status == 'CANCELLED').toList();
+              final active = all
+                  .where((r) => _activeStatuses.contains(r.status))
+                  .toList();
+              final completed =
+                  all.where((r) => r.status == 'COMPLETED').toList();
+              final cancelled =
+                  all.where((r) => r.status == 'CANCELLED').toList();
 
               return TabBarView(
                 controller: _tabController,
                 children: [
-                  _ReservationList(reservations: upcoming,  emptyMessage: 'Aucune réservation à venir',   emptyIcon: Icons.calendar_today_rounded),
-                  _ReservationList(reservations: past,      emptyMessage: 'Aucune réservation passée',    emptyIcon: Icons.history_rounded),
-                  _ReservationList(reservations: cancelled, emptyMessage: 'Aucune réservation annulée',   emptyIcon: Icons.cancel_outlined),
+                  _ReservationList(
+                      reservations: active,
+                      emptyMessage: 'Aucune réservation en cours',
+                      emptyIcon: PhosphorIconsRegular.calendarBlank),
+                  _ReservationList(
+                      reservations: completed,
+                      emptyMessage: 'Aucune réservation terminée',
+                      emptyIcon: PhosphorIconsRegular.clockCounterClockwise),
+                  _ReservationList(
+                      reservations: cancelled,
+                      emptyMessage: 'Aucune réservation annulée',
+                      emptyIcon: PhosphorIconsRegular.xCircle),
                 ],
               );
             },
@@ -123,10 +147,12 @@ class _BookingsScreenState extends State<BookingsScreen> with SingleTickerProvid
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _ReservationList extends StatelessWidget {
   final List<ReservationModel> reservations;
   final String emptyMessage;
-  final IconData emptyIcon;
+  final PhosphorIconData emptyIcon;
 
   const _ReservationList({
     required this.reservations,
@@ -140,12 +166,16 @@ class _ReservationList extends StatelessWidget {
       return _EmptyState(message: emptyMessage, icon: emptyIcon);
     }
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
       itemCount: reservations.length,
-      itemBuilder: (context, i) => _ReservationCard(reservation: reservations[i]),
+      itemBuilder: (context, i) =>
+          _ReservationCard(reservation: reservations[i]),
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ReservationCard extends StatelessWidget {
   final ReservationModel reservation;
@@ -153,114 +183,133 @@ class _ReservationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final r = reservation;
-    final isPast = r.startTime.isBefore(DateTime.now());
 
-    final (statusLabel, statusColor, statusBg, statusIcon) = switch (r.status) {
-      'CONFIRMED' => ('Confirmée', const Color(0xFF16A34A), const Color(0xFFDCFCE7), Icons.check_circle_rounded),
-      'CANCELLED' => ('Annulée', const Color(0xFFDC2626), const Color(0xFFFEE2E2), Icons.cancel_rounded),
-      'COMPLETED' => ('Terminée', const Color(0xFF6366F1), const Color(0xFFEDE9FE), Icons.verified_rounded),
-      _ => ('En attente', const Color(0xFFD97706), const Color(0xFFFFF3CD), Icons.hourglass_top_rounded),
-    };
+    final statusLabel = ReservationStatusHelper.label(r.status);
+    final statusColor = ReservationStatusHelper.textColor(r.status);
+    final statusBg = ReservationStatusHelper.backgroundColor(r.status);
+    final statusIcon = ReservationStatusHelper.icon(r.status);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          )
-        ],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── En-tête (Badge & Marque) ─────────
+          // ── En-tête ──────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.local_laundry_service_rounded, color: Color(0xFF2563EB), size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Machine', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                        Text(r.machineBrand.toUpperCase(), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: const Color(0xFF0F172A))),
-                      ],
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: AppColors.completedBg,
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                  child: const PhosphorIcon(
+                      PhosphorIconsRegular.washingMachine,
+                      color: AppColors.primary,
+                      size: 20),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Machine',
+                          style: tt.labelSmall?.copyWith(
+                              fontSize: 10,
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.5)),
+                      Text(r.machineBrand.toUpperCase(),
+                          style: tt.titleSmall
+                              ?.copyWith(color: AppColors.textPrimary)),
+                    ],
+                  ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm + AppSpacing.xs,
+                      vertical: AppSpacing.xs),
+                  decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusFull)),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(statusIcon, color: statusColor, size: 14),
-                      const SizedBox(width: 4),
-                      Text(statusLabel, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 11, color: statusColor)),
+                      PhosphorIcon(statusIcon,
+                          color: statusColor, size: 13),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(statusLabel,
+                          style: tt.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: statusColor)),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          
-          // ── Détails Date & Prix ─────────
+
+          Divider(height: 1, color: AppColors.border),
+
+          // ── Date & Prix ───────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.calendar_month_rounded, size: 16, color: Color(0xFF64748B)),
-                          const SizedBox(width: 6),
-                          Text(
-                            DateFormat('EEEE d MMM yyyy', 'fr').format(r.startTime),
-                            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          const Icon(Icons.schedule_rounded, size: 16, color: Color(0xFF64748B)),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${DateFormat('HH:mm').format(r.startTime)} - ${DateFormat('HH:mm').format(r.endTime)}',
-                            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: const Color(0xFF374151)),
-                          ),
-                        ],
-                      ),
-                      if (r.machineAddress != null && r.machineAddress!.isNotEmpty) ...[
-                        const SizedBox(height: 10),
+                      Row(children: [
+                        const PhosphorIcon(PhosphorIconsRegular.calendarBlank,
+                            size: 15, color: AppColors.textSecondary),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          DateFormat('EEEE d MMM yyyy', 'fr')
+                              .format(r.startTime),
+                          style: tt.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textBody),
+                        ),
+                      ]),
+                      const SizedBox(height: AppSpacing.sm),
+                      Row(children: [
+                        const PhosphorIcon(PhosphorIconsRegular.clock,
+                            size: 15, color: AppColors.textSecondary),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          '${DateFormat('HH:mm').format(r.startTime)} - ${DateFormat('HH:mm').format(r.endTime)}',
+                          style: tt.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textBody),
+                        ),
+                      ]),
+                      if (r.machineAddress != null &&
+                          r.machineAddress!.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.location_on_rounded, size: 16, color: Color(0xFF64748B)),
-                            const SizedBox(width: 6),
-                            Expanded(child: Text(r.machineAddress!, style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B), height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                            const PhosphorIcon(PhosphorIconsRegular.mapPin,
+                                size: 15, color: AppColors.textSecondary),
+                            const SizedBox(width: AppSpacing.xs),
+                            Expanded(
+                              child: Text(r.machineAddress!,
+                                  style: tt.bodySmall,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis),
+                            ),
                           ],
                         ),
                       ],
@@ -269,17 +318,19 @@ class _ReservationCard extends StatelessWidget {
                 ),
                 Container(
                   width: 1,
-                  height: 60,
-                  color: const Color(0xFFF1F5F9),
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  height: 56,
+                  color: AppColors.border,
+                  margin: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg),
                 ),
                 Column(
                   children: [
-                    Text('Total', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w600)),
+                    Text('Total', style: tt.bodySmall),
                     const SizedBox(height: 2),
                     Text(
                       '${r.totalPrice.toStringAsFixed(2)} €',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 20, color: const Color(0xFF2563EB)),
+                      style: tt.titleLarge
+                          ?.copyWith(color: AppColors.primary),
                     ),
                   ],
                 ),
@@ -287,23 +338,59 @@ class _ReservationCard extends StatelessWidget {
             ),
           ),
 
-          // ── Actions ─────────
-          if (!isPast && r.status == 'PENDING') ...[
+          // ── Détails du service ────────────────────────────────────
+          _ServiceDetails(reservation: r),
+
+          // ── Action : Annuler ──────────────────────────────────────
+          if (r.status == 'PENDING') ...[
             Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+              decoration: BoxDecoration(
+                color: AppColors.scaffoldBackground,
+                borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(AppSpacing.radiusXl)),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg, vertical: AppSpacing.md),
               child: OutlinedButton(
                 onPressed: () => _cancel(context, r),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFDC2626)),
-                  backgroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.md),
+                  shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusMd)),
                 ),
-                child: Text('Annuler la réservation', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: const Color(0xFFDC2626))),
+                child: const Text('Annuler la réservation'),
+              ),
+            ),
+          ],
+
+          // ── Action : Laisser un avis ──────────────────────────────
+          if (r.status == 'COMPLETED' && !r.hasBeenReviewed) ...[
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.scaffoldBackground,
+                borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(AppSpacing.radiusXl)),
+              ),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+              child: OutlinedButton.icon(
+                onPressed: () => context.push('/reviews/new', extra: r),
+                icon: const PhosphorIcon(PhosphorIconsRegular.star,
+                    size: 15),
+                label: const Text('Laisser un avis'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.textPrimary),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.md),
+                  shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusMd)),
+                ),
               ),
             ),
           ],
@@ -313,24 +400,34 @@ class _ReservationCard extends StatelessWidget {
   }
 
   Future<void> _cancel(BuildContext context, ReservationModel r) async {
+    final tt = Theme.of(context).textTheme;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626)),
-            const SizedBox(width: 8),
-            Text('Annulation', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 20)),
-          ],
-        ),
-        content: Text('Voulez-vous vraiment annuler cette réservation ? Cette action est irréversible.', style: GoogleFonts.inter(color: const Color(0xFF475569))),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusXl)),
+        title: Row(children: [
+          const PhosphorIcon(PhosphorIconsRegular.warning,
+              color: AppColors.error, size: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Text('Annulation', style: tt.titleMedium),
+        ]),
+        content: Text(
+            'Voulez-vous vraiment annuler cette réservation ? Cette action est irréversible.',
+            style: tt.bodyMedium
+                ?.copyWith(color: AppColors.textSecondary)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Retour', style: GoogleFonts.inter(color: const Color(0xFF64748B), fontWeight: FontWeight.bold))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Retour')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.error,
+                shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusMd))),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Confirmer', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+            child: const Text('Confirmer'),
           ),
         ],
       ),
@@ -341,54 +438,175 @@ class _ReservationCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// _ServiceDetails — affiche le programme, mode de remise et options choisies
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ServiceDetails extends StatelessWidget {
+  final ReservationModel reservation;
+  const _ServiceDetails({required this.reservation});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final r = reservation;
+
+    final hasDetails = r.selectedProgramId != null ||
+        r.pickupMethod == 'COLLECTED' ||
+        r.requestedFolding ||
+        r.requestedDelivery ||
+        (r.washInstructions != null && r.washInstructions!.isNotEmpty);
+
+    if (!hasDetails) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (r.pickupMethod == 'COLLECTED')
+            _DetailChip(
+              icon: PhosphorIconsRegular.van,
+              label: 'Collecte à domicile',
+            ),
+          if (r.requestedFolding)
+            _DetailChip(
+              icon: PhosphorIconsRegular.tShirt,
+              label: 'Pliage demandé',
+            ),
+          if (r.requestedDelivery)
+            _DetailChip(
+              icon: PhosphorIconsRegular.package,
+              label: r.deliveryAddress != null
+                  ? 'Livraison → ${r.deliveryAddress}'
+                  : 'Livraison demandée',
+            ),
+          if (r.washInstructions != null &&
+              r.washInstructions!.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const PhosphorIcon(PhosphorIconsRegular.chatCircle,
+                    size: 13, color: AppColors.textSecondary),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    r.washInstructions!,
+                    style: tt.bodySmall
+                        ?.copyWith(fontStyle: FontStyle.italic),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailChip extends StatelessWidget {
+  final PhosphorIconData icon;
+  final String label;
+  const _DetailChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Row(children: [
+        PhosphorIcon(icon, size: 13, color: AppColors.primary),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            label,
+            style: tt.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600, color: AppColors.textBody),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _EmptyState extends StatelessWidget {
   final String message;
-  final IconData icon;
+  final PhosphorIconData icon;
   const _EmptyState({required this.message, required this.icon});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Container(
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: const Color(0xFF2563EB).withValues(alpha: 0.1), blurRadius: 30, offset: const Offset(0, 10))],
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.xxl - AppSpacing.xs),
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.completedBg,
+          ),
+          child: PhosphorIcon(icon, size: 52, color: AppColors.primary),
         ),
-        child: Icon(icon, size: 56, color: const Color(0xFF2563EB)),
-      ),
-      const SizedBox(height: 24),
-      Text(message, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: const Color(0xFF0F172A))),
-      const SizedBox(height: 8),
-      Text('Découvrez les machines près de chez vous !', style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF64748B))),
-    ]),
-  );
+        const SizedBox(height: AppSpacing.xl),
+        Text(message, style: tt.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        Text('Découvrez les machines près de chez vous !',
+            style: tt.bodySmall),
+      ]),
+    );
+  }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ErrorWidget extends StatelessWidget {
   final String message;
   const _ErrorWidget({required this.message});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFECACA))),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 40),
-            const SizedBox(height: 12),
-            Text('Erreur de chargement', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: const Color(0xFF991B1B))),
-            const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center, style: GoogleFonts.inter(color: const Color(0xFFB91C1C), fontSize: 12)),
-          ],
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+              color: AppColors.cancelledBg,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+              border: Border.all(color: AppColors.error)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const PhosphorIcon(PhosphorIconsRegular.warningCircle,
+                  color: AppColors.error, size: 40),
+              const SizedBox(height: AppSpacing.md),
+              Text('Erreur de chargement',
+                  style: tt.titleSmall
+                      ?.copyWith(color: AppColors.cancelledText)),
+              const SizedBox(height: AppSpacing.sm),
+              Text(message,
+                  textAlign: TextAlign.center,
+                  style: tt.bodySmall
+                      ?.copyWith(color: AppColors.cancelledText)),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
-

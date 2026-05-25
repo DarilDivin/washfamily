@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
-// ------------------------------------------------------------------
-// AnimatedBottomNavBar — Effet "Sliding Glow"
-// Architecture : Stack { GlowIndicator (AnimatedPositioned) + Row d'icônes }
-// Barre fixée en bas (pas flottante), fond blanc, bordure top fine.
-// ------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
+// AnimatedBottomNavBar — Barre plate style Airbnb avec Sliding Glow Indicator
+// DS §6.1 : border-top 1px, elevation 0, Phosphor icons
+// ─────────────────────────────────────────────────────────────────────────────
 
 class AnimatedBottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -21,112 +22,103 @@ class AnimatedBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      // ── Barre fixe en bas, bord à bord ───────────────────────────
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      // LayoutBuilder pour connaître la largeur réelle → calcul du Glow
-      child: SafeArea(
-        top: false,
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 64,
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // ── 📐 MATHS DU GLOW ──────────────────────────────────────
-            // totalWidth = largeur réelle de la barre (sans padding)
-            // itemWidth  = totalWidth / 5  (une part par onglet)
-            // glowLeft   = currentIndex * itemWidth  (position X de l'indicateur)
             const int itemCount = 5;
-            final double totalWidth = constraints.maxWidth;
-            final double itemWidth = totalWidth / itemCount;
+            final double itemWidth = constraints.maxWidth / itemCount;
             final double glowLeft = currentIndex * itemWidth;
-            // ──────────────────────────────────────────────────────────
 
-            return SizedBox(
-              height: 66,
-              child: Stack(
-                children: [
-                  // ── ✨ COUCHE 1 : Indicateur "Sliding Glow" ──────────
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    left: glowLeft,
-                    top: 0,
-                    width: itemWidth,
-                    height: 66,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Barre "source de lumière" (2px de haut, 30px de large)
-                        Center(
-                          child: Container(
-                            width: 30,
-                            height: 2,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2563EB),
-                              borderRadius: BorderRadius.circular(1),
-                            ),
-                          ),
-                        ),
-                        // Dégradé bleu → transparent sur toute la hauteur restante
-                        Expanded(
-                          child: Container(
-                            width: itemWidth,
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Color(0x1A2563EB), // bleu @ 10%
-                                  Color(0x002563EB), // bleu @ 0% (vrai transparent)
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // ── 🎛️ COUCHE 2 : Row des 5 onglets ─────────────────
-                  Row(
+            return Stack(
+              children: [
+                // ── Sliding Glow Indicator ───────────────────────
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  left: glowLeft,
+                  top: 0,
+                  width: itemWidth,
+                  height: 64,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _NavItem(
-                        iconOutlined: Icons.home_outlined,
-                        iconFilled: Icons.home_rounded,
-                        label: "Accueil",
-                        isActive: currentIndex == 0,
-                        onTap: () => onTap(0),
+                      // Barre indicatrice (2px)
+                      Center(
+                        child: Container(
+                          width: 28,
+                          height: 2,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(
+                                AppSpacing.radiusFull),
+                          ),
+                        ),
                       ),
-                      _NavItem(
-                        iconOutlined: Icons.local_mall_outlined,
-                        iconFilled: Icons.local_mall_rounded,
-                        label: "Boutique",
-                        isActive: currentIndex == 1,
-                        onTap: () => onTap(1),
-                      ),
-                      _NavItem(
-                        iconOutlined: Icons.calendar_month_outlined,
-                        iconFilled: Icons.calendar_month_rounded,
-                        label: "Réservations",
-                        isActive: currentIndex == 2,
-                        onTap: () => onTap(2),
-                      ),
-                      _NotifNavItem(
-                        isActive: currentIndex == 3,
-                        onTap: () => onTap(3),
-                      ),
-                      _NavItem(
-                        iconOutlined: Icons.person_outline_rounded,
-                        iconFilled: Icons.person_rounded,
-                        label: "Profil",
-                        isActive: currentIndex == 4,
-                        onTap: () => onTap(4),
+                      // Halo dégradé bleu → transparent
+                      Expanded(
+                        child: Container(
+                          width: itemWidth,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                AppColors.primary.withValues(alpha: 0.10),
+                                AppColors.primary.withValues(alpha: 0.00),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+
+                // ── Onglets ──────────────────────────────────────
+                Row(
+                  children: [
+                    _NavItem(
+                      iconRegular: PhosphorIconsRegular.house,
+                      iconFill: PhosphorIconsFill.house,
+                      label: 'Accueil',
+                      isActive: currentIndex == 0,
+                      onTap: () => onTap(0),
+                    ),
+                    _NavItem(
+                      iconRegular: PhosphorIconsRegular.shoppingBag,
+                      iconFill: PhosphorIconsFill.shoppingBag,
+                      label: 'Boutique',
+                      isActive: currentIndex == 1,
+                      onTap: () => onTap(1),
+                    ),
+                    _NavItem(
+                      iconRegular: PhosphorIconsRegular.calendarBlank,
+                      iconFill: PhosphorIconsFill.calendarBlank,
+                      label: 'Réservations',
+                      isActive: currentIndex == 2,
+                      onTap: () => onTap(2),
+                    ),
+                    _MessagesNavItem(
+                      isActive: currentIndex == 3,
+                      onTap: () => onTap(3),
+                    ),
+                    _NavItem(
+                      iconRegular: PhosphorIconsRegular.user,
+                      iconFill: PhosphorIconsFill.user,
+                      label: 'Profil',
+                      isActive: currentIndex == 4,
+                      onTap: () => onTap(4),
+                    ),
+                  ],
+                ),
+              ],
             );
           },
         ),
@@ -135,19 +127,19 @@ class AnimatedBottomNavBar extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------------
-// _NavItem — Élément individuel avec changement de couleur animé
-// ------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
+// _NavItem — Onglet standard avec crossfade icône + interpolation couleur texte
+// ─────────────────────────────────────────────────────────────────────────────
 class _NavItem extends StatelessWidget {
-  final IconData iconOutlined;
-  final IconData iconFilled;
+  final PhosphorIconData iconRegular;
+  final PhosphorIconData iconFill;
   final String label;
   final bool isActive;
   final VoidCallback onTap;
 
   const _NavItem({
-    required this.iconOutlined,
-    required this.iconFilled,
+    required this.iconRegular,
+    required this.iconFill,
     required this.label,
     required this.isActive,
     required this.onTap,
@@ -155,43 +147,40 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Actif → Royal Blue | Inactif → Gris Ardoise
-    final targetColor = isActive ? const Color(0xFF2563EB) : const Color(0xFF64748B);
-    final targetIcon  = isActive ? iconFilled : iconOutlined;
+    final tt = Theme.of(context).textTheme;
+    final color = isActive ? AppColors.primary : AppColors.textSecondary;
 
     return Expanded(
-      child: GestureDetector(
+      child: InkWell(
         onTap: onTap,
-        behavior: HitTestBehavior.opaque,
         child: SizedBox(
-          height: 66,
+          height: 64,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Icône avec crossfade fluide entre Outlined et Filled
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
-                child: Icon(
-                  targetIcon,
+                child: PhosphorIcon(
+                  isActive ? iconFill : iconRegular,
                   key: ValueKey(isActive),
-                  color: targetColor,
+                  color: color,
                   size: 22,
                 ),
               ),
-              const SizedBox(height: 4),
-              // Texte avec interpolation de couleur fluide
+              const SizedBox(height: AppSpacing.xs),
               TweenAnimationBuilder<Color?>(
                 duration: const Duration(milliseconds: 200),
                 tween: ColorTween(
-                  begin: isActive ? const Color(0xFF64748B) : const Color(0xFF2563EB),
-                  end: targetColor,
+                  begin: isActive ? AppColors.textSecondary : AppColors.primary,
+                  end: color,
                 ),
-                builder: (context, color, _) => Text(
+                builder: (context, animColor, _) => Text(
                   label,
-                  style: GoogleFonts.inter(
+                  style: tt.labelSmall?.copyWith(
+                    color: animColor,
+                    fontWeight:
+                        isActive ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 10,
-                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                    color: color,
                   ),
                 ),
               ),
@@ -203,66 +192,88 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-// ------------------------------------------------------------------
-// _NotifNavItem — Onglet Notifications avec badge temps réel
-// ------------------------------------------------------------------
-class _NotifNavItem extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// _MessagesNavItem — Onglet Messages avec badge temps réel Firestore
+// ─────────────────────────────────────────────────────────────────────────────
+class _MessagesNavItem extends StatelessWidget {
   final bool isActive;
   final VoidCallback onTap;
 
-  const _NotifNavItem({required this.isActive, required this.onTap});
+  const _MessagesNavItem({required this.isActive, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final targetColor = isActive ? const Color(0xFF2563EB) : const Color(0xFF64748B);
-    final icon = isActive ? Icons.notifications_rounded : Icons.notifications_none_rounded;
+    final tt = Theme.of(context).textTheme;
+    final color = isActive ? AppColors.primary : AppColors.textSecondary;
 
     return Expanded(
-      child: GestureDetector(
+      child: InkWell(
         onTap: onTap,
-        behavior: HitTestBehavior.opaque,
         child: SizedBox(
-          height: 66,
+          height: 64,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Icône avec badge non lues
-              StreamBuilder<String?>(
-                stream: FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
-                  if (user == null) return const Stream.empty();
+              StreamBuilder<int>(
+                stream: FirebaseAuth.instance
+                    .authStateChanges()
+                    .asyncExpand((user) {
+                  if (user == null) return Stream.value(0);
                   return FirebaseFirestore.instance
-                      .collection('notifications')
-                      .where('userId', isEqualTo: user.uid)
-                      .where('isRead', isEqualTo: false)
+                      .collection('conversations')
+                      .where('participantIds', arrayContains: user.uid)
                       .snapshots()
-                      .map((snap) => snap.docs.length > 9 ? '9+' : snap.docs.length > 0 ? '${snap.docs.length}' : null);
+                      .map((snap) {
+                    int total = 0;
+                    for (final doc in snap.docs) {
+                      final data = doc.data();
+                      final unread = (data['unreadCount']
+                          as Map<String, dynamic>?)?[user.uid];
+                      if (unread is int) total += unread;
+                    }
+                    return total;
+                  });
                 }),
                 builder: (context, snapshot) {
-                  final badge = snapshot.data;
+                  final count = snapshot.data ?? 0;
+                  final badge = count > 9
+                      ? '9+'
+                      : count > 0
+                          ? '$count'
+                          : null;
                   return Stack(
                     clipBehavior: Clip.none,
                     children: [
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 200),
-                        child: Icon(icon,
-                            key: ValueKey(isActive), color: targetColor, size: 22),
+                        child: PhosphorIcon(
+                          isActive
+                              ? PhosphorIconsFill.chatCircle
+                              : PhosphorIconsRegular.chatCircle,
+                          key: ValueKey(isActive),
+                          color: color,
+                          size: 22,
+                        ),
                       ),
                       if (badge != null)
                         Positioned(
                           right: -6,
                           top: -4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.xs,
+                                vertical: AppSpacing.xs / 2),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFDC2626),
-                              borderRadius: BorderRadius.circular(8),
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusFull),
                             ),
                             child: Text(
                               badge,
-                              style: const TextStyle(
+                              style: tt.labelSmall?.copyWith(
+                                color: AppColors.surface,
+                                fontWeight: FontWeight.w700,
                                 fontSize: 8,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
                               ),
                             ),
                           ),
@@ -271,19 +282,21 @@ class _NotifNavItem extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.xs),
               TweenAnimationBuilder<Color?>(
                 duration: const Duration(milliseconds: 200),
                 tween: ColorTween(
-                  begin: isActive ? const Color(0xFF64748B) : const Color(0xFF2563EB),
-                  end: targetColor,
+                  begin:
+                      isActive ? AppColors.textSecondary : AppColors.primary,
+                  end: color,
                 ),
-                builder: (context, color, _) => Text(
-                  'Notifs',
-                  style: GoogleFonts.inter(
+                builder: (context, animColor, _) => Text(
+                  'Messages',
+                  style: tt.labelSmall?.copyWith(
+                    color: animColor,
+                    fontWeight:
+                        isActive ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 10,
-                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                    color: color,
                   ),
                 ),
               ),
@@ -294,3 +307,4 @@ class _NotifNavItem extends StatelessWidget {
     );
   }
 }
+

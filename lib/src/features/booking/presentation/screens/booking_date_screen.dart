@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../data/repositories/firestore_reservation_repository.dart';
 import '../../../machines_map/domain/models/machine_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:washfamily/src/features/authentication/data/repositories/user_repository.dart';
 import 'package:washfamily/src/features/authentication/domain/models/user_model.dart';
 import 'package:washfamily/src/features/subscriptions/data/subscription_repository.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 /// Étape 1 du tunnel de réservation.
 /// L'utilisateur choisit une date puis un créneau horaire disponible.
@@ -24,31 +26,37 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
   final _repo = FirestoreReservationRepository();
 
   DateTime _selectedDay = DateTime.now();
-  int? _selectedHour; // Heure du début (ex: 10 = 10h00)
-  int _selectedDuration = 1; // Durée en heures (max 4)
+  int? _selectedHour;
+  int _selectedDuration = 1;
   List<DateTime> _bookedSlots = [];
   bool _loadingSlots = false;
 
-  static const _primaryColor = Color(0xFF2563EB);
-
   List<int> get _hours {
-    if (!widget.machine.availableDays.contains(_selectedDay.weekday)) return [];
-    final length = widget.machine.endTimeHour - widget.machine.startTimeHour;
+    if (!widget.machine.availableDays.contains(_selectedDay.weekday)) {
+      return [];
+    }
+    final length =
+        widget.machine.endTimeHour - widget.machine.startTimeHour;
     if (length <= 0) return [];
-    return List.generate(length, (i) => widget.machine.startTimeHour + i);
+    return List.generate(
+        length, (i) => widget.machine.startTimeHour + i);
   }
 
   UserModel? _currentUser;
   bool _loadingUser = true;
 
   bool get _subscriptionExpired {
-    if (_currentUser == null || _currentUser!.isAdmin || _currentUser!.isOwner) return false;
+    if (_currentUser == null ||
+        _currentUser!.isAdmin ||
+        _currentUser!.isOwner) { return false; }
     final end = _currentUser!.subscriptionEndDate;
     return end != null && end.isBefore(DateTime.now());
   }
 
   bool get _quotaExceeded {
-    if (_currentUser == null || _currentUser!.isAdmin || _currentUser!.isOwner) return false;
+    if (_currentUser == null ||
+        _currentUser!.isAdmin ||
+        _currentUser!.isOwner) { return false; }
     return _currentUser!.remainingReservations <= 0;
   }
 
@@ -66,15 +74,24 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
     if (uid != null) {
       await SubscriptionRepository().checkAndResetIfExpired(uid);
       final user = await UserRepository().getUser(uid);
-      if (mounted) setState(() { _currentUser = user; _loadingUser = false; });
+      if (mounted) {
+        setState(() {
+          _currentUser = user;
+          _loadingUser = false;
+        });
+      }
     } else {
-      if (mounted) setState(() { _loadingUser = false; });
+      if (mounted) setState(() => _loadingUser = false);
     }
   }
 
   Future<void> _loadSlots(DateTime date) async {
     setState(() => _loadingSlots = true);
-    final booked = await _repo.getBookedSlots(widget.machine.id, date);
+    final booked =
+        await _repo.getBookedSlots(
+            laundryId: widget.machine.laundryId,
+            machineId: widget.machine.id,
+            date: date);
     setState(() {
       _bookedSlots = booked;
       _selectedHour = null;
@@ -82,21 +99,21 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
     });
   }
 
-  bool _isBooked(int hour) {
-    return _bookedSlots.any((dt) => dt.hour == hour);
-  }
+  bool _isBooked(int hour) =>
+      _bookedSlots.any((dt) => dt.hour == hour);
 
   bool _isPast(int hour) {
     final now = DateTime.now();
-    final slotDate = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, hour);
+    final slotDate = DateTime(_selectedDay.year, _selectedDay.month,
+        _selectedDay.day, hour);
     return slotDate.isBefore(now);
   }
 
   bool _canBookDuration(int startHour, int duration) {
     for (int i = 0; i < duration; i++) {
-       final h = startHour + i;
-       if (_isBooked(h) || _isPast(h)) return false;
-       if (!_hours.contains(h)) return false; // Ne pas dépasser la grille dispo
+      final h = startHour + i;
+      if (_isBooked(h) || _isPast(h)) return false;
+      if (!_hours.contains(h)) return false;
     }
     return true;
   }
@@ -104,21 +121,24 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
   void _setDuration(int dur) {
     setState(() {
       _selectedDuration = dur;
-      if (_selectedHour != null && !_canBookDuration(_selectedHour!, dur)) {
+      if (_selectedHour != null &&
+          !_canBookDuration(_selectedHour!, dur)) {
         _selectedHour = null;
       }
     });
   }
 
   void _onDaySelected(DateTime day) {
-    if (day.isBefore(DateTime.now().subtract(const Duration(days: 1)))) return;
+    if (day.isBefore(
+        DateTime.now().subtract(const Duration(days: 1)))) { return; }
     setState(() => _selectedDay = day);
     _loadSlots(day);
   }
 
   void _confirm() {
     if (_selectedHour == null) return;
-    final start = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day, _selectedHour!);
+    final start = DateTime(_selectedDay.year, _selectedDay.month,
+        _selectedDay.day, _selectedHour!);
     final end = start.add(Duration(hours: _selectedDuration));
     final price = widget.machine.pricePerWash * _selectedDuration;
 
@@ -132,46 +152,63 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        title: Text('Réserver', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.white,
+        title: Text('Réserver', style: tt.titleLarge),
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        foregroundColor: const Color(0xFF0F172A),
+        foregroundColor: AppColors.textPrimary,
         surfaceTintColor: Colors.transparent,
       ),
       body: Column(
         children: [
           // ── Bandeau machine ─────────────────────────────────────────
           Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            color: AppColors.surface,
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
             child: Row(
               children: [
                 Container(
-                  width: 48, height: 48,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)]),
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.completedBg,
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusMd),
                   ),
-                  child: const Icon(Icons.local_laundry_service_rounded, color: Colors.white, size: 24),
+                  child: const PhosphorIcon(
+                      PhosphorIconsRegular.washingMachine,
+                      color: AppColors.primary,
+                      size: 24),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(widget.machine.brand, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text(widget.machine.address ?? 'Adresse non précisée',
-                        style: GoogleFonts.inter(color: const Color(0xFF64748B), fontSize: 12),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(widget.machine.brand, style: tt.titleSmall),
+                    Text(
+                        widget.machine.address ?? 'Adresse non précisée',
+                        style: tt.bodySmall,
                         overflow: TextOverflow.ellipsis),
                   ]),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+                  decoration: BoxDecoration(
+                      color: AppColors.completedBg,
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusMd)),
                   child: Text(
                     '${widget.machine.pricePerWash.toStringAsFixed(2)} €/h',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: _primaryColor, fontSize: 13),
+                    style: tt.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary),
                   ),
                 ),
               ],
@@ -179,252 +216,309 @@ class _BookingDateScreenState extends State<BookingDateScreen> {
           ),
 
           if (_loadingUser)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
+            const Expanded(
+                child: Center(
+                    child: CircularProgressIndicator(
+                        color: AppColors.primary)))
           else if (_currentUser != null && _isBlocked)
-            Expanded(child: _BlockedView(
+            Expanded(
+                child: _BlockedView(
               isExpired: _subscriptionExpired,
               expiryDate: _currentUser!.subscriptionEndDate,
             ))
           else
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 children: [
-                  // ── Sélecteur de mois ──────────────────────────────────
+                  // ── Date ─────────────────────────────────────────────
                   _SectionLabel('Choisissez une date'),
-                const SizedBox(height: 12),
-                _CalendarWidget(
-                  selectedDay: _selectedDay,
-                  onDaySelected: _onDaySelected,
-                  availableDays: widget.machine.availableDays,
-                ),
-                const SizedBox(height: 24),
-
-                Row(children: [
-                  _SectionLabel('Choisissez une durée'),
-                ]),
-                const SizedBox(height: 12),
-                Row(
-                  children: [1, 2, 3, 4].map((dur) {
-                    final selected = _selectedDuration == dur;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => _setDuration(dur),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: selected ? _primaryColor : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: selected ? _primaryColor : const Color(0xFFE2E8F0)),
-                            boxShadow: selected ? [BoxShadow(color: _primaryColor.withValues(alpha: 0.3), blurRadius: 8)] : null,
-                          ),
-                          child: Text('$dur h', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: selected ? Colors.white : const Color(0xFF374151))),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 24),
-                Row(children: [
-                  _SectionLabel('Choisissez un créneau (${_selectedDuration}h)'),
-                  const SizedBox(width: 8),
-                  if (_loadingSlots)
-                    const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-                ]),
-                const SizedBox(height: 12),
-                if (_hours.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 20, bottom: 20),
-                    child: Center(
-                      child: Text('Aucun créneau disponible ce jour',
-                          style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontStyle: FontStyle.italic)),
-                    ),
-                  )
-                else
-                  GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 1.8,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                  const SizedBox(height: AppSpacing.md),
+                  _CalendarWidget(
+                    selectedDay: _selectedDay,
+                    onDaySelected: _onDaySelected,
+                    availableDays: widget.machine.availableDays,
                   ),
-                  itemCount: _hours.length,
-                  itemBuilder: (context, i) {
-                    final hour = _hours[i];
-                    final disabled = !_canBookDuration(hour, _selectedDuration);
-                    final isSelectedSpan = _selectedHour != null && hour >= _selectedHour! && hour < _selectedHour! + _selectedDuration;
-                    final isStart = _selectedHour == hour;
+                  const SizedBox(height: AppSpacing.xl),
 
-                    return GestureDetector(
-                      onTap: disabled ? null : () => setState(() => _selectedHour = hour),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        decoration: BoxDecoration(
-                          color: isSelectedSpan
-                              ? _primaryColor.withValues(alpha: isStart ? 1 : 0.7)
-                              : disabled
-                                  ? const Color(0xFFF1F5F9)
-                                  : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelectedSpan
-                                ? _primaryColor
-                                : disabled
-                                    ? const Color(0xFFE2E8F0)
-                                    : const Color(0xFFCBD5E1),
+                  // ── Durée ─────────────────────────────────────────────
+                  _SectionLabel('Choisissez une durée'),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [1, 2, 3, 4].map((dur) {
+                      final selected = _selectedDuration == dur;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => _setDuration(dur),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.only(
+                                right: AppSpacing.sm),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: AppSpacing.md),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? AppColors.primary
+                                  : AppColors.surface,
+                              borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusMd),
+                              border: Border.all(
+                                  color: selected
+                                      ? AppColors.primary
+                                      : AppColors.border),
+                            ),
+                            child: Text('$dur h',
+                                style: tt.labelLarge?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: selected
+                                        ? AppColors.surface
+                                        : AppColors.textBody)),
                           ),
-                          boxShadow: isStart
-                              ? [BoxShadow(color: _primaryColor.withValues(alpha: 0.3), blurRadius: 8)]
-                              : null,
                         ),
-                        alignment: Alignment.center,
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+
+                  // ── Créneaux ──────────────────────────────────────────
+                  Row(children: [
+                    _SectionLabel(
+                        'Choisissez un créneau (${_selectedDuration}h)'),
+                    const SizedBox(width: AppSpacing.sm),
+                    if (_loadingSlots)
+                      const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary)),
+                  ]),
+                  const SizedBox(height: AppSpacing.md),
+                  if (_hours.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.xl),
+                      child: Center(
                         child: Text(
-                          '${hour.toString().padLeft(2, '0')}h00',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: isSelectedSpan
-                                ? Colors.white
-                                : disabled
-                                    ? const Color(0xFFCBD5E1)
-                                    : const Color(0xFF374151),
-                          ),
-                        ),
+                            'Aucun créneau disponible ce jour',
+                            style: tt.bodySmall
+                                ?.copyWith(fontStyle: FontStyle.italic)),
                       ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Légende
-                Row(children: [
-                  _LegendDot(color: Colors.white, border: const Color(0xFFCBD5E1)),
-                  const SizedBox(width: 6),
-                  Text('Disponible', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B))),
-                  const SizedBox(width: 16),
-                  _LegendDot(color: _primaryColor),
-                  const SizedBox(width: 6),
-                  Text('Sélectionné', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B))),
-                  const SizedBox(width: 16),
-                  _LegendDot(color: const Color(0xFFF1F5F9), border: const Color(0xFFE2E8F0)),
-                  const SizedBox(width: 6),
-                  Text('Indisponible', style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B))),
-                ]),
-              ],
+                    )
+                  else
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 4,
+                        childAspectRatio: 1.8,
+                        crossAxisSpacing: AppSpacing.sm,
+                        mainAxisSpacing: AppSpacing.sm,
+                      ),
+                      itemCount: _hours.length,
+                      itemBuilder: (context, i) {
+                        final hour = _hours[i];
+                        final disabled =
+                            !_canBookDuration(hour, _selectedDuration);
+                        final isSelectedSpan = _selectedHour != null &&
+                            hour >= _selectedHour! &&
+                            hour < _selectedHour! + _selectedDuration;
+                        final isStart = _selectedHour == hour;
+
+                        return GestureDetector(
+                          onTap: disabled
+                              ? null
+                              : () => setState(
+                                  () => _selectedHour = hour),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            decoration: BoxDecoration(
+                              color: isSelectedSpan
+                                  ? AppColors.primary.withValues(
+                                      alpha: isStart ? 1.0 : 0.7)
+                                  : disabled
+                                      ? AppColors.inputBackground
+                                      : AppColors.surface,
+                              borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusMd),
+                              border: Border.all(
+                                color: isSelectedSpan
+                                    ? AppColors.primary
+                                    : disabled
+                                        ? AppColors.border
+                                        : AppColors.border,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '${hour.toString().padLeft(2, '0')}h00',
+                              style: tt.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: isSelectedSpan
+                                    ? AppColors.surface
+                                    : disabled
+                                        ? AppColors.border
+                                        : AppColors.textBody,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // ── Légende ───────────────────────────────────────────
+                  Row(children: [
+                    _LegendDot(
+                        color: AppColors.surface,
+                        border: AppColors.border),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text('Disponible', style: tt.bodySmall),
+                    const SizedBox(width: AppSpacing.lg),
+                    const _LegendDot(color: AppColors.primary),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text('Sélectionné', style: tt.bodySmall),
+                    const SizedBox(width: AppSpacing.lg),
+                    _LegendDot(
+                        color: AppColors.inputBackground,
+                        border: AppColors.border),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text('Indisponible', style: tt.bodySmall),
+                  ]),
+                ],
+              ),
             ),
-          ),
         ],
       ),
 
-      // ── CTA Continuer ───────────────────────────────────────────────
-      bottomNavigationBar: _loadingUser || (_currentUser != null && _isBlocked) ? null : SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Récapitulatif créneau sélectionné
-              if (_selectedHour != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(children: [
-                    const Icon(Icons.access_time_rounded, color: _primaryColor, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${DateFormat('EEE d MMM', 'fr').format(_selectedDay)}'
-                      ' · ${_selectedHour!.toString().padLeft(2, '0')}h00 → ${(_selectedHour! + _selectedDuration).toString().padLeft(2, '0')}h00\n'
-                      'Total: ${(widget.machine.pricePerWash * _selectedDuration).toStringAsFixed(2)} €',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: _primaryColor, fontSize: 13),
+      // ── CTA Continuer ──────────────────────────────────────────────
+      bottomNavigationBar:
+          _loadingUser || (_currentUser != null && _isBlocked)
+              ? null
+              : SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
+                        AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_selectedHour != null)
+                          Container(
+                            margin: const EdgeInsets.only(
+                                bottom: AppSpacing.md),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.lg,
+                                vertical: AppSpacing.sm),
+                            decoration: BoxDecoration(
+                              color: AppColors.completedBg,
+                              borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusMd),
+                            ),
+                            child: Row(children: [
+                              const PhosphorIcon(
+                                  PhosphorIconsRegular.clock,
+                                  color: AppColors.primary,
+                                  size: 15),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  '${DateFormat('EEE d MMM', 'fr').format(_selectedDay)}'
+                                  ' · ${_selectedHour!.toString().padLeft(2, '0')}h00 → ${(_selectedHour! + _selectedDuration).toString().padLeft(2, '0')}h00\n'
+                                  'Total: ${(widget.machine.pricePerWash * _selectedDuration).toStringAsFixed(2)} €',
+                                  style: tt.labelLarge?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary),
+                                ),
+                              ),
+                            ]),
+                          ),
+                        FilledButton(
+                          onPressed:
+                              _selectedHour != null ? _confirm : null,
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: AppSpacing.lg),
+                            backgroundColor: AppColors.primary,
+                            disabledBackgroundColor: AppColors.border,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                    AppSpacing.radiusMd)),
+                            minimumSize: const Size(double.infinity, 0),
+                          ),
+                          child: Text(
+                            _selectedHour == null
+                                ? 'Choisissez un créneau'
+                                : 'Continuer',
+                          ),
+                        ),
+                      ],
                     ),
-                  ]),
+                  ),
                 ),
-              FilledButton(
-                onPressed: _selectedHour != null ? _confirm : null,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  backgroundColor: _primaryColor,
-                  disabledBackgroundColor: const Color(0xFFCBD5E1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  minimumSize: const Size(double.infinity, 0),
-                ),
-                child: Text(
-                  _selectedHour == null ? 'Choisissez un créneau' : 'Continuer',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────
-// Sous-widgets
-// ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _BlockedView
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _BlockedView extends StatelessWidget {
   final bool isExpired;
   final DateTime? expiryDate;
   const _BlockedView({required this.isExpired, this.expiryDate});
 
-  static const _primaryColor = Color(0xFF2563EB);
-
   @override
   Widget build(BuildContext context) {
-    final icon    = isExpired ? Icons.timer_off_outlined : Icons.block_outlined;
-    final color   = isExpired ? const Color(0xFFF97316) : const Color(0xFFDC2626);
-    final title   = isExpired ? 'Abonnement expiré' : 'Limite atteinte';
+    final tt = Theme.of(context).textTheme;
+    final icon = isExpired
+        ? PhosphorIconsRegular.clockCountdown
+        : PhosphorIconsRegular.prohibit;
+    final color = isExpired ? AppColors.warning : AppColors.error;
+    final title =
+        isExpired ? 'Abonnement expiré' : 'Limite atteinte';
     final subtitle = isExpired
         ? 'Votre abonnement a expiré le ${_fmt(expiryDate)}.\nRenouvelez-le pour continuer à réserver.'
         : "Vous n'avez plus de réservations disponibles ce mois-ci.";
-    final cta = isExpired ? 'Renouveler mon abonnement' : 'Voir les abonnements';
+    final cta =
+        isExpired ? 'Renouveler mon abonnement' : 'Voir les abonnements';
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 52, color: color),
+              child: PhosphorIcon(icon, size: 52, color: color),
             ),
-            const SizedBox(height: 20),
-            Text(title,
-                style: GoogleFonts.inter(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF0F172A))),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpacing.lg),
+            Text(title, style: tt.titleLarge),
+            const SizedBox(height: AppSpacing.sm),
             Text(subtitle,
-                style: GoogleFonts.inter(
-                    fontSize: 14, color: const Color(0xFF64748B), height: 1.5),
+                style: tt.bodyMedium
+                    ?.copyWith(color: AppColors.textSecondary),
                 textAlign: TextAlign.center),
-            const SizedBox(height: 28),
+            const SizedBox(height: AppSpacing.xxl),
             FilledButton(
               onPressed: () => context.push('/subscriptions'),
               style: FilledButton.styleFrom(
-                backgroundColor: _primaryColor,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xl,
+                    vertical: AppSpacing.md),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusMd)),
               ),
-              child: Text(cta,
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              child: Text(cta),
             ),
           ],
         ),
@@ -438,6 +532,10 @@ class _BlockedView extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Sous-widgets légers
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
@@ -445,7 +543,8 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         text,
-        style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15, color: const Color(0xFF0F172A)),
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            fontWeight: FontWeight.w600, color: AppColors.textPrimary),
       );
 }
 
@@ -456,16 +555,21 @@ class _LegendDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 14, height: 14,
+        width: 14,
+        height: 14,
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
-          border: border != null ? Border.all(color: border!) : null,
+          border:
+              border != null ? Border.all(color: border!) : null,
         ),
       );
 }
 
-/// Mini-calendrier personnalisé (mois courant + suivant)
+// ─────────────────────────────────────────────────────────────────────────────
+// _CalendarWidget
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _CalendarWidget extends StatefulWidget {
   final DateTime selectedDay;
   final ValueChanged<DateTime> onDaySelected;
@@ -487,94 +591,128 @@ class _CalendarWidgetState extends State<_CalendarWidget> {
   @override
   void initState() {
     super.initState();
-    _focusedMonth = DateTime(widget.selectedDay.year, widget.selectedDay.month);
+    _focusedMonth = DateTime(
+        widget.selectedDay.year, widget.selectedDay.month);
   }
 
   @override
   Widget build(BuildContext context) {
-    final daysInMonth = DateUtils.getDaysInMonth(_focusedMonth.year, _focusedMonth.month);
-    final firstDayOffset = DateTime(_focusedMonth.year, _focusedMonth.month, 1).weekday - 1;
+    final tt = Theme.of(context).textTheme;
+    final daysInMonth = DateUtils.getDaysInMonth(
+        _focusedMonth.year, _focusedMonth.month);
+    final firstDayOffset =
+        DateTime(_focusedMonth.year, _focusedMonth.month, 1)
+                .weekday -
+            1;
     final today = DateTime.now();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         children: [
           // Navigation mois
           Row(children: [
             IconButton(
-              icon: const Icon(Icons.chevron_left_rounded),
+              icon: const PhosphorIcon(
+                  PhosphorIconsRegular.caretLeft,
+                  size: 18,
+                  color: AppColors.textPrimary),
               onPressed: () => setState(() {
-                _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+                _focusedMonth = DateTime(
+                    _focusedMonth.year, _focusedMonth.month - 1);
               }),
             ),
             Expanded(
               child: Text(
                 DateFormat('MMMM yyyy', 'fr').format(_focusedMonth),
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15),
+                style: tt.titleSmall,
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.chevron_right_rounded),
+              icon: const PhosphorIcon(
+                  PhosphorIconsRegular.caretRight,
+                  size: 18,
+                  color: AppColors.textPrimary),
               onPressed: () => setState(() {
-                _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+                _focusedMonth = DateTime(
+                    _focusedMonth.year, _focusedMonth.month + 1);
               }),
             ),
           ]),
 
           // Jours de la semaine
           Row(
-            children: ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d) => Expanded(
-              child: Text(d, textAlign: TextAlign.center,
-                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF94A3B8))),
-            )).toList(),
+            children: ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+                .map((d) => Expanded(
+                      child: Text(d,
+                          textAlign: TextAlign.center,
+                          style: tt.labelSmall?.copyWith(
+                              color: AppColors.textSecondary)),
+                    ))
+                .toList(),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
 
           // Grille des jours
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, childAspectRatio: 1.1),
+            gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7, childAspectRatio: 1.1),
             itemCount: firstDayOffset + daysInMonth,
             itemBuilder: (context, index) {
               if (index < firstDayOffset) return const SizedBox();
               final day = index - firstDayOffset + 1;
-              final date = DateTime(_focusedMonth.year, _focusedMonth.month, day);
-              final isSelected = DateUtils.isSameDay(date, widget.selectedDay);
+              final date = DateTime(
+                  _focusedMonth.year, _focusedMonth.month, day);
+              final isSelected =
+                  DateUtils.isSameDay(date, widget.selectedDay);
               final isToday = DateUtils.isSameDay(date, today);
-              final isPast = date.isBefore(DateTime(today.year, today.month, today.day));
-              final isAvailableDay = widget.availableDays.contains(date.weekday);
+              final isPast = date.isBefore(
+                  DateTime(today.year, today.month, today.day));
+              final isAvailableDay =
+                  widget.availableDays.contains(date.weekday);
               final isDisabled = isPast || !isAvailableDay;
 
               return GestureDetector(
-                onTap: isDisabled ? null : () => widget.onDaySelected(date),
+                onTap: isDisabled
+                    ? null
+                    : () => widget.onDaySelected(date),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
                   margin: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFF2563EB) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: isToday && !isSelected ? Border.all(color: const Color(0xFF2563EB)) : null,
+                    color: isSelected
+                        ? AppColors.primary
+                        : Colors.transparent,
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusSm),
+                    border: isToday && !isSelected
+                        ? Border.all(color: AppColors.primary)
+                        : null,
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     day.toString(),
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
+                    style: tt.bodySmall?.copyWith(
+                      fontWeight: isSelected || isToday
+                          ? FontWeight.w700
+                          : FontWeight.w500,
                       color: isSelected
-                          ? Colors.white
+                          ? AppColors.surface
                           : isDisabled
-                              ? const Color(0xFFCBD5E1) // Gris clair si bloqué ou passé
-                              : const Color(0xFF374151),
-                      decoration: (!isAvailableDay && !isPast) ? TextDecoration.lineThrough : null, // Barré si jour fermé
+                              ? AppColors.border
+                              : AppColors.textBody,
+                      decoration: (!isAvailableDay && !isPast)
+                          ? TextDecoration.lineThrough
+                          : null,
                     ),
                   ),
                 ),

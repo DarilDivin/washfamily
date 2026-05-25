@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(find \"d:\\\\Projects\\\\Flutter\\\\washfamily\" -type f -name \"*.dart\" -exec grep -l \"@riverpod\\\\|@Riverpod\" {} \\\\;)",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(flutter pub *)",
+      "Bash(flutter analyze *)",
+      "Bash(dart run *)",
+      "Bash(firebase deploy *)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

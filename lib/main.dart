@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'src/core/router_config.dart';
 import 'src/core/theme/app_theme.dart';
+import 'src/features/subscriptions/data/subscription_repository.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -30,6 +32,7 @@ Future<void> main() async {
   await dotenv.load(fileName: ".env");
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeDateFormatting('fr', null); // Locale française pour intl
+  unawaited(SubscriptionRepository().seedPlansIfEmpty());
   runApp(const ProviderScope(child: MyApp()));
 }
 

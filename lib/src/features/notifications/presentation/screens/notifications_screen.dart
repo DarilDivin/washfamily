@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../domain/models/notification_model.dart';
 import '../../data/repositories/notification_repository.dart';
 import 'notification_detail_screen.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, authSnapshot) {
@@ -20,24 +25,22 @@ class NotificationsScreen extends StatelessWidget {
         final repo = NotificationRepository();
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF8FAFC),
+          backgroundColor: AppColors.scaffoldBackground,
           appBar: AppBar(
-            automaticallyImplyLeading: false,
-            backgroundColor: const Color(0xFFF8FAFC),
+            backgroundColor: AppColors.surface,
             surfaceTintColor: Colors.transparent,
             elevation: 0,
-            title: Text(
-              'Notifications',
-              style: GoogleFonts.inter(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF0F172A),
-              ),
+            foregroundColor: AppColors.textPrimary,
+            leading: IconButton(
+              icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft,
+                  size: 20),
+              onPressed: () => context.pop(),
             ),
+            title: Text('Notifications', style: tt.titleLarge),
             centerTitle: true,
             bottom: const PreferredSize(
               preferredSize: Size.fromHeight(1),
-              child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+              child: Divider(height: 1, color: AppColors.border),
             ),
           ),
           body: StreamBuilder<List<NotificationModel>>(
@@ -56,23 +59,24 @@ class NotificationsScreen extends StatelessWidget {
               final unread = all.where((n) => !n.isRead).toList();
               final now = DateTime.now();
               final todayStart = DateTime(now.year, now.month, now.day);
-              final today = all.where((n) => n.createdAt.isAfter(todayStart)).toList();
-              final earlier = all.where((n) => !n.createdAt.isAfter(todayStart)).toList();
+              final today =
+                  all.where((n) => n.createdAt.isAfter(todayStart)).toList();
+              final earlier =
+                  all.where((n) => !n.createdAt.isAfter(todayStart)).toList();
 
               return ListView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
+                padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 80),
                 children: [
-                  // ── Header ──────────────────────────────────────────────
+                  // ── Header ────────────────────────────────────────────
                   Row(
                     children: [
                       Text(
                         unread.isEmpty
                             ? 'Tout est lu'
                             : '${unread.length} non lue${unread.length > 1 ? 's' : ''}',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: const Color(0xFF94A3B8),
-                        ),
+                        style: tt.labelSmall
+                            ?.copyWith(color: AppColors.textSecondary),
                       ),
                       const Spacer(),
                       if (unread.isNotEmpty)
@@ -80,21 +84,19 @@ class NotificationsScreen extends StatelessWidget {
                           onTap: () => repo.markAllAsRead(uid),
                           child: Text(
                             'Tout marquer lu',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFF475569),
-                            ),
+                            style: tt.labelSmall?.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w500),
                           ),
                         ),
                     ],
                   ),
 
-                  // ── Aujourd'hui ──────────────────────────────────────────
+                  // ── Aujourd'hui ───────────────────────────────────────
                   if (today.isNotEmpty) ...[
-                    const SizedBox(height: 20),
+                    const SizedBox(height: AppSpacing.lg),
                     _GroupLabel("Aujourd'hui"),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.sm),
                     ...today.map((n) => _NotificationCard(
                           notification: n,
                           onTap: () => Navigator.of(context).push(
@@ -106,11 +108,11 @@ class NotificationsScreen extends StatelessWidget {
                         )),
                   ],
 
-                  // ── Plus tôt ─────────────────────────────────────────────
+                  // ── Plus tôt ──────────────────────────────────────────
                   if (earlier.isNotEmpty) ...[
-                    const SizedBox(height: 20),
+                    const SizedBox(height: AppSpacing.lg),
                     _GroupLabel('Plus tôt'),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.sm),
                     ...earlier.map((n) => _NotificationCard(
                           notification: n,
                           onTap: () => Navigator.of(context).push(
@@ -131,7 +133,9 @@ class NotificationsScreen extends StatelessWidget {
   }
 }
 
-// ── Group label ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _GroupLabel
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _GroupLabel extends StatelessWidget {
   final String text;
@@ -139,37 +143,42 @@ class _GroupLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     return Text(
       text.toUpperCase(),
-      style: GoogleFonts.inter(
+      style: tt.labelSmall?.copyWith(
         fontSize: 10,
         fontWeight: FontWeight.w700,
-        color: const Color(0xFFCBD5E1),
+        color: AppColors.border,
         letterSpacing: 1.2,
       ),
     );
   }
 }
 
-// ── Icône par type (monochrome) ────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Icône par type de notification
+// ─────────────────────────────────────────────────────────────────────────────
 
-IconData _iconFor(String title) {
+PhosphorIconData _iconFor(String title) {
   if (title.contains('Nouvelle') || title.contains('demande')) {
-    return Icons.local_laundry_service_outlined;
+    return PhosphorIconsRegular.washingMachine;
   }
   if (title.contains('confirmée') || title.contains('✅')) {
-    return Icons.check_circle_outline_rounded;
+    return PhosphorIconsRegular.checkCircle;
   }
   if (title.contains('refusée') || title.contains('❌')) {
-    return Icons.cancel_outlined;
+    return PhosphorIconsRegular.xCircle;
   }
   if (title.contains('Rappel') || title.contains('⏰')) {
-    return Icons.alarm_outlined;
+    return PhosphorIconsRegular.bellRinging;
   }
-  return Icons.notifications_none_rounded;
+  return PhosphorIconsRegular.bell;
 }
 
-// ── Card ───────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _NotificationCard
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _NotificationCard extends StatelessWidget {
   final NotificationModel notification;
@@ -179,47 +188,48 @@ class _NotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final n = notification;
     final isUnread = !n.isRead;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: isUnread ? Colors.white : const Color(0xFFFAFAFA),
-          borderRadius: BorderRadius.circular(14),
+          color: isUnread ? AppColors.surface : AppColors.scaffoldBackground,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           border: Border.all(
-            color: isUnread
-                ? const Color(0xFFE2E8F0)
-                : const Color(0xFFF1F5F9),
+            color: isUnread ? AppColors.border : AppColors.inputBackground,
           ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icon
+            // Icône
             Container(
               width: 40,
               height: 40,
               decoration: BoxDecoration(
                 color: isUnread
-                    ? const Color(0xFFF1F5F9)
-                    : const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(10),
+                    ? AppColors.inputBackground
+                    : AppColors.scaffoldBackground,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
               ),
-              child: Icon(
-                _iconFor(n.title),
-                size: 20,
-                color: isUnread
-                    ? const Color(0xFF475569)
-                    : const Color(0xFFCBD5E1),
+              child: Center(
+                child: PhosphorIcon(
+                  _iconFor(n.title),
+                  size: 20,
+                  color: isUnread
+                      ? AppColors.textSecondary
+                      : AppColors.border,
+                ),
               ),
             ),
-            const SizedBox(width: 13),
+            const SizedBox(width: AppSpacing.md),
 
-            // Content
+            // Contenu
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -230,50 +240,45 @@ class _NotificationCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           n.title,
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
+                          style: tt.bodyMedium?.copyWith(
                             fontWeight: isUnread
                                 ? FontWeight.w600
                                 : FontWeight.w500,
                             color: isUnread
-                                ? const Color(0xFF0F172A)
-                                : const Color(0xFF94A3B8),
+                                ? AppColors.textPrimary
+                                : AppColors.textSecondary,
                           ),
                         ),
                       ),
                       if (isUnread) ...[
-                        const SizedBox(width: 10),
+                        const SizedBox(width: AppSpacing.sm),
                         Container(
                           width: 7,
                           height: 7,
                           decoration: const BoxDecoration(
-                            color: Color(0xFF0F172A),
+                            color: AppColors.textPrimary,
                             shape: BoxShape.circle,
                           ),
                         ),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
                     n.message,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
+                    style: tt.bodySmall?.copyWith(
                       color: isUnread
-                          ? const Color(0xFF475569)
-                          : const Color(0xFFCBD5E1),
+                          ? AppColors.textSecondary
+                          : AppColors.border,
                       height: 1.45,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
                     _formatDate(n.createdAt),
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: const Color(0xFFCBD5E1),
-                    ),
+                    style: tt.labelSmall?.copyWith(color: AppColors.border),
                   ),
                 ],
               ),
@@ -293,13 +298,17 @@ class _NotificationCard extends StatelessWidget {
   }
 }
 
-// ── États ──────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// États
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _LoadingView extends StatelessWidget {
   const _LoadingView();
+
   @override
-  Widget build(BuildContext context) =>
-      const Center(child: CircularProgressIndicator());
+  Widget build(BuildContext context) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
 }
 
 class _EmptyView extends StatelessWidget {
@@ -307,43 +316,24 @@ class _EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(48),
+        padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.notifications_none_rounded,
-                size: 32,
-                color: Color(0xFFCBD5E1),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Aucune notification',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 8),
+            const PhosphorIcon(PhosphorIconsRegular.bell,
+                size: 48, color: AppColors.textSecondary),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Aucune notification',
+                style: tt.titleMedium, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               'Vous serez notifié lors de nouvelles réservations ou de changements de statut.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: const Color(0xFF94A3B8),
-                height: 1.6,
-              ),
+              style:
+                  tt.bodyMedium?.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -358,30 +348,23 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(40),
+        padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 40, color: Color(0xFFCBD5E1)),
-            const SizedBox(height: 16),
-            Text(
-              'Une erreur est survenue',
-              style: GoogleFonts.inter(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF0F172A),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                  fontSize: 12, color: const Color(0xFF94A3B8)),
-            ),
+            const PhosphorIcon(PhosphorIconsRegular.warning,
+                size: 48, color: AppColors.textSecondary),
+            const SizedBox(height: AppSpacing.lg),
+            Text('Une erreur est survenue',
+                style: tt.titleMedium, textAlign: TextAlign.center),
+            const SizedBox(height: AppSpacing.sm),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: tt.bodySmall
+                    ?.copyWith(color: AppColors.textSecondary)),
           ],
         ),
       ),

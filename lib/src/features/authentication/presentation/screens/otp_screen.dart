@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pinput/pinput.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:washfamily/src/features/authentication/data/services/auth_service.dart'; 
-import 'login_screen.dart'; // pour checkAuthRedirection
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:washfamily/src/features/authentication/data/services/auth_service.dart';
+import 'login_screen.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 class OtpScreen extends StatefulWidget {
   final String destination;
@@ -17,85 +20,91 @@ class OtpScreen extends StatefulWidget {
 class _OtpScreenState extends State<OtpScreen> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final tt = Theme.of(context).textTheme;
 
-    // Style pour les 6 cases
     final defaultPinTheme = PinTheme(
-      width: 46,
-      height: 54,
-      textStyle: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+      width: 48,
+      height: 56,
+      textStyle: tt.headlineSmall?.copyWith(
+          fontWeight: FontWeight.w700, color: AppColors.primary),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(color: AppColors.border),
       ),
     );
 
     final focusedPinTheme = defaultPinTheme.copyDecorationWith(
-      border: Border.all(color: theme.primaryColor, width: 2),
-      boxShadow: [BoxShadow(color: theme.primaryColor.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, 4))],
+      border: Border.all(color: AppColors.primary, width: 2),
     );
 
     final submittedPinTheme = defaultPinTheme.copyDecorationWith(
-      color: const Color(0xFFF1F5F9),
+      color: AppColors.inputBackground,
       border: Border.all(color: Colors.transparent),
     );
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leadingWidth: 150,
-        leading: TextButton.icon(
+        foregroundColor: AppColors.textPrimary,
+        leading: IconButton(
+          icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft,
+              size: 20),
           onPressed: () => context.pop(),
-          icon: Icon(Icons.arrow_back, color: theme.primaryColor, size: 18),
-          label: Text("WashFamily", style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
         ),
+        title: Text('WashFamily',
+            style: tt.titleSmall?.copyWith(color: AppColors.primary)),
+        titleSpacing: 0,
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          padding:
+              const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-               const SizedBox(height: 40),
-              
-               Text(
-                "Entrez le code",
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                ),
+              const SizedBox(height: AppSpacing.xxl),
+
+              Text(
+                'Entrez le code',
+                style: tt.headlineLarge,
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
-              
+              const SizedBox(height: AppSpacing.md),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    "Envoyé au ${widget.destination}",
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    'Envoyé au ${widget.destination}',
+                    style: tt.bodyMedium
+                        ?.copyWith(color: AppColors.textSecondary),
                   ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () => context.pop(), // Revenir en arrière pour modifier
-                    child: Text(
-                      "MODIFIER",
-                      style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5),
-                    ),
-                  )
+                  const SizedBox(width: AppSpacing.sm),
+                  TextButton(
+                    onPressed: () => context.pop(),
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: Text('MODIFIER',
+                        style: tt.labelSmall?.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5)),
+                  ),
                 ],
               ),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: AppSpacing.xxxl),
 
-              // PINPUT 6 CHIFFRES
+              // ── Pinput ─────────────────────────────────────────────
               Center(
                 child: Pinput(
-                  length: 6, // Firebase demande toujours 6 chiffres
+                  length: 6,
                   defaultPinTheme: defaultPinTheme,
                   focusedPinTheme: focusedPinTheme,
                   submittedPinTheme: submittedPinTheme,
@@ -105,85 +114,106 @@ class _OtpScreenState extends State<OtpScreen> {
                     if (!context.mounted) return;
 
                     if (isSuccess) {
-                       final user = FirebaseAuth.instance.currentUser;
-                       if (user != null) {
-                         await checkAuthRedirection(context, user);
-                       } else {
-                         context.go('/profile-setup');
-                       }
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (user != null) {
+                        await checkAuthRedirection(context, user);
+                      } else {
+                        context.go('/profile-setup');
+                      }
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Code incorrect ou expiré."), backgroundColor: Colors.red),
+                        const SnackBar(
+                          content: Text('Code incorrect ou expiré.'),
+                          backgroundColor: AppColors.error,
+                        ),
                       );
                     }
                   },
                 ),
               ),
 
-              const SizedBox(height: 32),
-              
-              // Widget Sécurité
+              const SizedBox(height: AppSpacing.xxl),
+
+              // ── Bloc sécurité ──────────────────────────────────────
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF), // Bleu très clair
-                  borderRadius: BorderRadius.circular(16),
+                  color: AppColors.completedBg,
+                  borderRadius:
+                      BorderRadius.circular(AppSpacing.radiusLg),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(color: theme.primaryColor.withValues(alpha: 0.1), shape: BoxShape.circle),
-                      child: Icon(Icons.shield_rounded, color: theme.primaryColor, size: 20),
+                child: Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color:
+                          AppColors.primary.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
+                    child: const PhosphorIcon(
+                        PhosphorIconsRegular.shieldCheck,
+                        color: AppColors.primary,
+                        size: 20),
+                  ),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(
+                    child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text("Sécurité WashFamily", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E3A8A))),
-                          const SizedBox(height: 4),
-                          Text("Nous vérifions votre identité pour sécuriser vos prochaines commandes.", style: TextStyle(fontSize: 11, color: Colors.blue[800])),
-                        ],
-                      ),
-                    )
-                  ],
-                ),
+                      Text('Sécurité WashFamily',
+                          style: tt.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary)),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                          'Nous vérifions votre identité pour sécuriser vos prochaines commandes.',
+                          style: tt.bodySmall
+                              ?.copyWith(color: AppColors.primary)),
+                    ]),
+                  ),
+                ]),
               ),
 
-              const SizedBox(height: 64),
+              const SizedBox(height: AppSpacing.xxxl),
 
               Center(
                 child: Text(
-                  "Je n'ai pas reçu le code (00:30)",
-                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  'Je n\'ai pas reçu le code (00:30)',
+                  style: tt.bodySmall
+                      ?.copyWith(color: AppColors.textSecondary),
                 ),
               ),
-              
+
               const Spacer(),
-              
-              // Footer
-              Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text("Privacy Policy", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                    const SizedBox(width: 16),
-                    Text("Terms of Service", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                    const SizedBox(width: 16),
-                    Text("Legal", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: Text("© 2024 WashFamily. All rights reserved.", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-              ),
-              const SizedBox(height: 16),
+
+              // ── Footer ─────────────────────────────────────────────
+              _Footer(),
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+class _Footer extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final style =
+        tt.bodySmall?.copyWith(color: AppColors.textSecondary, fontSize: 10);
+    return Column(children: [
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text('Privacy Policy', style: style),
+        const SizedBox(width: AppSpacing.lg),
+        Text('Terms of Service', style: style),
+        const SizedBox(width: AppSpacing.lg),
+        Text('Legal', style: style),
+      ]),
+      const SizedBox(height: AppSpacing.xs),
+      Text('© 2025 WashFamily. All rights reserved.',
+          textAlign: TextAlign.center, style: style),
+      const SizedBox(height: AppSpacing.lg),
+    ]);
   }
 }

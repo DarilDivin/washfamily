@@ -2,30 +2,35 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
-import '../../../machines_map/domain/models/machine_model.dart';
-import '../../../machines_map/data/repositories/firestore_machine_repository.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import '../../../laundries/data/providers/laundry_providers.dart';
+import '../../../laundries/domain/models/laundry_model.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../widgets/nearby_machines_sheet.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   final Completer<GoogleMapController> _controller = Completer();
-  final FirestoreMachineRepository _machineRepository = FirestoreMachineRepository();
 
   Set<Marker> _markers = {};
-  List<MachineModel> _machines = [];
+  List<LaundryModel> _laundries = [];
   double? _userLat;
   double? _userLng;
-  MachineModel? _selectedMachine;
+  LaundryModel? _selectedLaundry;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -38,216 +43,152 @@ class _HomeScreenState extends State<HomeScreen> {
     zoom: 14.4746,
   );
 
+  StreamSubscription? _laundrySub;
+
   @override
   void initState() {
     super.initState();
     _checkPermissionsAndLocate();
-    _searchController.addListener(() {
-      setState(() => _searchQuery = _searchController.text.trim());
-    });
-    _searchFocus.addListener(() {
-      setState(() => _isSearchActive = _searchFocus.hasFocus);
-    });
+    _searchController.addListener(
+        () => setState(() => _searchQuery = _searchController.text.trim()));
+    _searchFocus.addListener(
+        () => setState(() => _isSearchActive = _searchFocus.hasFocus));
   }
 
   @override
   void dispose() {
+    _laundrySub?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
     super.dispose();
   }
 
   Future<void> _checkPermissionsAndLocate() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+    bool enabled = await Geolocator.isLocationServiceEnabled();
+    if (!enabled) return;
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) return;
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied) return;
     }
-    if (permission == LocationPermission.deniedForever) return;
+    if (perm == LocationPermission.deniedForever) return;
 
-    final position = await Geolocator.getCurrentPosition();
-
+    final pos = await Geolocator.getCurrentPosition();
     if (mounted) {
       setState(() {
-        _userLat = position.latitude;
-        _userLng = position.longitude;
+        _userLat = pos.latitude;
+        _userLng = pos.longitude;
       });
     }
 
-    final GoogleMapController controller = await _controller.future;
-    controller.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: LatLng(position.latitude, position.longitude),
-          zoom: 15,
-        ),
-      ),
-    );
-
-    await _loadMachines(position.latitude, position.longitude);
+    final ctrl = await _controller.future;
+    ctrl.animateCamera(CameraUpdate.newCameraPosition(
+        CameraPosition(target: LatLng(pos.latitude, pos.longitude), zoom: 15)));
   }
 
-  // Cache pour éviter de recalculer les bitmaps identiques
+  void _onLaundriesLoaded(List<LaundryModel> laundries) {
+    if (!mounted) return;
+    setState(() => _laundries = laundries);
+    _rebuildMarkers();
+  }
+
   final Map<String, BitmapDescriptor> _markerCache = {};
 
-  Future<void> _loadMachines(double lat, double lng) async {
-    try {
-      final machines = await _machineRepository.getAllMachines();
-      if (mounted) setState(() => _machines = machines);
-      await _rebuildMarkers();
-    } catch (e) {
-      debugPrint('Erreur chargement machines: $e');
-    }
-  }
-
-  Future<BitmapDescriptor> _buildMarkerBitmap(MachineModel machine,
+  Future<BitmapDescriptor> _buildMarkerBitmap(LaundryModel laundry,
       {bool selected = false}) async {
-    final cacheKey =
-        '${machine.status}_${machine.pricePerWash}_${selected ? 's' : 'n'}';
-    if (_markerCache.containsKey(cacheKey)) return _markerCache[cacheKey]!;
+    final key = '${laundry.id}_${selected ? 's' : 'n'}';
+    if (_markerCache.containsKey(key)) return _markerCache[key]!;
 
-    const double dpr    = 3.0;
-    const double pillW  = 90.0;
-    const double pillH  = 38.0;
-    const double triH   =  8.0;
-    const double totalH = pillH + triH;
-    const double radius = pillH / 2;
+    const double dpr = 3.0;
+    const double size = 48.0;
+    const double iconSize = 16.0;
 
-    final isAvailable   = machine.status == 'AVAILABLE';
-    final isInUse       = machine.status == 'IN_USE';
-
-    final bgColor = isAvailable
-        ? const Color(0xFF2563EB)
-        : isInUse
-            ? const Color(0xFFF97316)
-            : const Color(0xFF64748B);
+    final bgColor = selected ? AppColors.surface : AppColors.primary;
+    final iconColor = selected ? AppColors.primary : Colors.white;
 
     final recorder = ui.PictureRecorder();
-    final canvas   = Canvas(recorder,
-        Rect.fromLTWH(0, 0, pillW * dpr, totalH * dpr));
+    final canvas =
+        Canvas(recorder, Rect.fromLTWH(0, 0, size * dpr, size * dpr));
     canvas.scale(dpr);
 
-    // ── Ombre portée ──────────────────────────────────────────────
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(3, 4, pillW - 6, pillH - 2),
-        const Radius.circular(radius),
-      ),
+    const cx = size / 2;
+    const cy = size / 2;
+    const radius = size / 2;
+
+    canvas.drawCircle(const Offset(cx, cy), radius, Paint()..color = bgColor);
+    canvas.drawCircle(
+      const Offset(cx, cy),
+      radius - 1,
       Paint()
-        ..color = Colors.black.withValues(alpha: 0.22)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        ..color = AppColors.primary
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = selected ? 2.0 : 1.0,
     );
 
-    final pillRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 0, pillW, pillH),
-      const Radius.circular(radius),
-    );
-
-    if (selected) {
-      // ── Sélectionné : fond blanc + bordure + ombre colorée ───
-      canvas.drawRRect(pillRect, Paint()..color = Colors.white);
-      canvas.drawRRect(
-        pillRect,
-        Paint()
-          ..color = bgColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5,
-      );
-    } else {
-      // ── Normal : fond coloré + contour blanc subtil ──────────
-      canvas.drawRRect(pillRect, Paint()..color = bgColor);
-      canvas.drawRRect(
-        pillRect,
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.30)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5,
-      );
-    }
-
-    // ── Triangle pointer ──────────────────────────────────────────
-    final triPath = Path()
-      ..moveTo(pillW / 2 - 7, pillH - 1)
-      ..lineTo(pillW / 2 + 7, pillH - 1)
-      ..lineTo(pillW / 2,     pillH + triH)
-      ..close();
-    canvas.drawPath(triPath, Paint()..color = bgColor);
-
-    // ── Texte ─────────────────────────────────────────────────────
-    final label = isAvailable
-        ? '${machine.pricePerWash.toStringAsFixed(2).replaceAll('.', ',')} €'
-        : isInUse
-            ? 'En cours'
-            : 'Indisp.';
-
+    final icon = PhosphorIconsRegular.washingMachine;
+    final fontFamily = icon.fontPackage != null
+        ? 'packages/${icon.fontPackage}/${icon.fontFamily}'
+        : icon.fontFamily;
     final tp = TextPainter(
       text: TextSpan(
-        text: label,
+        text: String.fromCharCode(icon.codePoint),
         style: TextStyle(
-          color: selected ? bgColor : Colors.white,
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.3,
+          inherit: false,
+          fontSize: iconSize,
+          fontFamily: fontFamily,
+          color: iconColor,
         ),
       ),
       textDirection: TextDirection.ltr,
-    )..layout(maxWidth: pillW - 16);
+    )..layout();
+    tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
 
-    tp.paint(
-      canvas,
-      Offset((pillW - tp.width) / 2, (pillH - tp.height) / 2),
-    );
-
-    final image = await recorder.endRecording().toImage(
-      (pillW  * dpr).round(),
-      (totalH * dpr).round(),
-    );
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    final descriptor = BitmapDescriptor.bytes(
-      byteData!.buffer.asUint8List(),
-      width: pillW,
-      height: totalH,
-    );
-    _markerCache[cacheKey] = descriptor;
-    return descriptor;
+    final img = await recorder
+        .endRecording()
+        .toImage((size * dpr).round(), (size * dpr).round());
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    final desc = BitmapDescriptor.bytes(bytes!.buffer.asUint8List(),
+        width: size, height: size);
+    _markerCache[key] = desc;
+    return desc;
   }
 
-  double? _distanceTo(MachineModel m) {
+  double? _distanceTo(LaundryModel l) {
     if (_userLat == null || _userLng == null) return null;
     const r = 6371.0;
-    final dLat = (m.latitude  - _userLat!) * 3.14159265 / 180;
-    final dLng = (m.longitude - _userLng!) * 3.14159265 / 180;
+    final dLat = (l.latitude - _userLat!) * math.pi / 180;
+    final dLng = (l.longitude - _userLng!) * math.pi / 180;
     return r * math.sqrt(dLat * dLat + dLng * dLng);
   }
 
   Future<void> _rebuildMarkers() async {
-    final List<Marker> markers = [];
-    for (final machine in _machines) {
-      final sel = _selectedMachine?.id == machine.id;
-      final icon = await _buildMarkerBitmap(machine, selected: sel);
+    final markers = <Marker>[];
+    for (final l in _laundries) {
+      final sel = _selectedLaundry?.id == l.id;
+      final icon = await _buildMarkerBitmap(l, selected: sel);
       markers.add(Marker(
-        markerId: MarkerId(machine.id),
-        position: LatLng(machine.latitude, machine.longitude),
+        markerId: MarkerId(l.id),
+        position: LatLng(l.latitude, l.longitude),
         icon: icon,
         anchor: const Offset(0.5, 1.0),
         zIndexInt: sel ? 1 : 0,
-        onTap: () => _selectMachine(machine),
+        onTap: () => _selectLaundry(l),
       ));
     }
     if (mounted) setState(() => _markers = markers.toSet());
   }
 
-  void _selectMachine(MachineModel machine) {
-    setState(() => _selectedMachine = machine);
+  void _selectLaundry(LaundryModel l) {
+    setState(() => _selectedLaundry = l);
+    _markerCache.clear();
     _rebuildMarkers();
   }
 
-  void _deselectMachine() {
-    if (_selectedMachine == null) return;
-    setState(() => _selectedMachine = null);
+  void _deselectLaundry() {
+    if (_selectedLaundry == null) return;
+    setState(() => _selectedLaundry = null);
+    _markerCache.clear();
     _rebuildMarkers();
   }
 
@@ -256,27 +197,24 @@ class _HomeScreenState extends State<HomeScreen> {
     if (q.isEmpty) return;
     setState(() => _isSearching = true);
     try {
-      final locations = await locationFromAddress(q);
-      if (locations.isEmpty || !mounted) return;
-      final loc = locations.first;
+      final locs = await locationFromAddress(q);
+      if (locs.isEmpty || !mounted) return;
+      final loc = locs.first;
       final ctrl = await _controller.future;
       await ctrl.animateCamera(CameraUpdate.newCameraPosition(
-        CameraPosition(target: LatLng(loc.latitude, loc.longitude), zoom: 13),
-      ));
+          CameraPosition(
+              target: LatLng(loc.latitude, loc.longitude), zoom: 13)));
       setState(() {
         _userLat = loc.latitude;
         _userLng = loc.longitude;
       });
-      await _loadMachines(loc.latitude, loc.longitude);
       _searchFocus.unfocus();
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Adresse introuvable : $q'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Adresse introuvable : $q'),
+          behavior: SnackBarBehavior.floating,
+        ));
       }
     } finally {
       if (mounted) setState(() => _isSearching = false);
@@ -285,13 +223,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final topPadding = MediaQuery.of(context).padding.top;
+
+    // Écoute du provider de laveries
+    ref.listen<AsyncValue<List<LaundryModel>>>(
+      activeLaundriesProvider,
+      (_, next) {
+        if (next.hasValue) _onLaundriesLoaded(next.value!);
+      },
+    );
 
     return Scaffold(
       body: Stack(
         children: [
-          // ── Couche 1 : Google Map ───────────────────────────────
+          // ── Couche 1 : Google Map ─────────────────────────────────
           GoogleMap(
             mapType: MapType.normal,
             initialCameraPosition: _defaultPosition,
@@ -302,31 +247,25 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.only(bottom: 280),
             onTap: (_) {
               _searchFocus.unfocus();
-              _deselectMachine();
+              _deselectLaundry();
             },
-            onMapCreated: (GoogleMapController controller) {
-              if (!_controller.isCompleted) {
-                _controller.complete(controller);
-              }
-              _loadMachines(
-                _defaultPosition.target.latitude,
-                _defaultPosition.target.longitude,
-              );
+            onMapCreated: (ctrl) {
+              if (!_controller.isCompleted) _controller.complete(ctrl);
             },
           ),
 
-          // ── Couche 2 : BottomSheet ancré ───────────────────────
+          // ── Couche 2 : BottomSheet ancré ─────────────────────────
           NearbyMachinesSheet(
-            machines: _machines,
+            laundries: _laundries,
             userLat: _userLat,
             userLng: _userLng,
           ),
 
-          // ── Couche 3 : Barre de recherche ──────────────────────
+          // ── Couche 3 : Barre de recherche + cloche notifications ──
           Positioned(
-            top: topPadding + 12,
-            left: 16,
-            right: 16,
+            top: topPadding + AppSpacing.md,
+            left: AppSpacing.lg,
+            right: AppSpacing.lg + 56,
             child: _SearchBar(
               controller: _searchController,
               focusNode: _searchFocus,
@@ -343,45 +282,46 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // ── Couche 4 : Preview card machine sélectionnée ────────
+          // ── Cloche notifications ──────────────────────────────────
           Positioned(
-            left: 16,
-            right: 16,
+            top: topPadding + AppSpacing.md + 8,
+            right: AppSpacing.lg,
+            child: const _NotifBell(),
+          ),
+
+          // ── Couche 4 : Preview card laverie sélectionnée ──────────
+          Positioned(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
             bottom: 300,
             child: AnimatedSlide(
-              offset: _selectedMachine != null
+              offset: _selectedLaundry != null
                   ? Offset.zero
                   : const Offset(0, 1.6),
               duration: const Duration(milliseconds: 340),
               curve: Curves.easeOutCubic,
               child: AnimatedOpacity(
-                opacity: _selectedMachine != null ? 1.0 : 0.0,
+                opacity: _selectedLaundry != null ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 220),
                 child: IgnorePointer(
-                  ignoring: _selectedMachine == null,
-                  child: _selectedMachine != null
-                      ? _MachinePreviewCard(
-                          machine: _selectedMachine!,
-                          distanceKm: _distanceTo(_selectedMachine!),
-                          onClose: _deselectMachine,
+                  ignoring: _selectedLaundry == null,
+                  child: _selectedLaundry != null
+                      ? _LaundryPreviewCard(
+                          laundry: _selectedLaundry!,
+                          distanceKm: _distanceTo(_selectedLaundry!),
+                          onClose: _deselectLaundry,
                         )
-                      : const SizedBox(height: 112),
+                      : const SizedBox(height: 100),
                 ),
               ),
             ),
           ),
 
-          // ── Couche 5 : Bouton recentrer ──────────────────────────
+          // ── Couche 5 : Bouton recentrer ───────────────────────────
           Positioned(
             bottom: 320,
-            right: 20,
-            child: FloatingActionButton.small(
-              backgroundColor: Colors.white,
-              foregroundColor: theme.primaryColor,
-              elevation: 4,
-              onPressed: _checkPermissionsAndLocate,
-              child: const Icon(Icons.my_location),
-            ),
+            right: AppSpacing.xl,
+            child: _LocationButton(onTap: _checkPermissionsAndLocate),
           ),
         ],
       ),
@@ -390,189 +330,169 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Preview card — apparaît au tap sur un marker
+// _LocationButton
 // ─────────────────────────────────────────────────────────────────────────────
-class _MachinePreviewCard extends StatelessWidget {
-  final MachineModel machine;
-  final double? distanceKm;
-  final VoidCallback onClose;
 
-  const _MachinePreviewCard({
-    required this.machine,
-    required this.onClose,
-    this.distanceKm,
-  });
-
-  static const _blue  = Color(0xFF2563EB);
-  static const _slate = Color(0xFF64748B);
+class _LocationButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LocationButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final isAvailable = machine.status == 'AVAILABLE';
-    final statusColor = isAvailable
-        ? const Color(0xFF16A34A)
-        : machine.status == 'IN_USE'
-            ? const Color(0xFFF97316)
-            : _slate;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.border),
+          ),
+          child: const Center(
+            child: PhosphorIcon(PhosphorIconsRegular.crosshair,
+                size: 20, color: AppColors.primary),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _LaundryPreviewCard — preview au tap d'un marqueur
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LaundryPreviewCard extends StatelessWidget {
+  final LaundryModel laundry;
+  final double? distanceKm;
+  final VoidCallback onClose;
+
+  const _LaundryPreviewCard(
+      {required this.laundry, required this.onClose, this.distanceKm});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
 
     return GestureDetector(
-      onTap: () => context.push('/machine/${machine.id}', extra: machine),
+      onTap: () => context.push('/laundry/${laundry.id}'),
       child: Container(
-        height: 112,
+        height: 104,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.14),
-              blurRadius: 24,
-              spreadRadius: 1,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+          border: Border.all(color: AppColors.border),
         ),
         child: Row(
           children: [
-            // ── Photo / gradient ──────────────────────────────────
+            // Photo / placeholder
             ClipRRect(
-              borderRadius:
-                  const BorderRadius.horizontal(left: Radius.circular(20)),
+              borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(AppSpacing.radiusXl)),
               child: SizedBox(
-                width: 100,
-                height: 112,
-                child: machine.photoUrls.isNotEmpty
-                    ? Image.network(machine.photoUrls.first,
+                width: 96,
+                height: 104,
+                child: laundry.photoUrls.isNotEmpty
+                    ? Image.network(laundry.photoUrls.first,
                         fit: BoxFit.cover)
                     : Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
-                          ),
+                        color: AppColors.inputBackground,
+                        child: const Center(
+                          child: PhosphorIcon(
+                              PhosphorIconsRegular.washingMachine,
+                              size: 36,
+                              color: AppColors.textSecondary),
                         ),
-                        child: const Icon(
-                            Icons.local_laundry_service_rounded,
-                            size: 40,
-                            color: Colors.white54),
                       ),
               ),
             ),
 
-            // ── Infos ──────────────────────────────────────────────
+            // Infos
             Expanded(
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md, vertical: AppSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Ligne 1 : marque + bouton fermer
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            machine.brand,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF0F172A),
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          child: Text(laundry.name,
+                              style: tt.titleSmall,
+                              overflow: TextOverflow.ellipsis),
                         ),
-                        GestureDetector(
+                        InkWell(
                           onTap: onClose,
+                          borderRadius:
+                              BorderRadius.circular(AppSpacing.radiusFull),
                           child: Container(
-                            padding: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.all(AppSpacing.xs),
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Color(0xFFF1F5F9),
+                              color: AppColors.inputBackground,
                             ),
-                            child: const Icon(Icons.close_rounded,
-                                size: 14, color: _slate),
+                            child: const PhosphorIcon(PhosphorIconsRegular.x,
+                                size: 14, color: AppColors.textSecondary),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-
-                    // Ligne 2 : adresse
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on_outlined,
-                            size: 12, color: _slate),
-                        const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            machine.address ?? 'Adresse non précisée',
-                            style: const TextStyle(
-                                fontSize: 11, color: _slate),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(children: [
+                      const PhosphorIcon(PhosphorIconsRegular.mapPin,
+                          size: 11, color: AppColors.textSecondary),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          laundry.address,
+                          style: tt.bodySmall,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
+                      ),
+                    ]),
                     const Spacer(),
-
-                    // Ligne 3 : statut · distance · prix · CTA
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
+                        if (laundry.reviewCount > 0) ...[
+                          const PhosphorIcon(PhosphorIconsFill.star,
+                              size: 12, color: AppColors.starActive),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(
+                            '${laundry.rating.toStringAsFixed(1)} (${laundry.reviewCount})',
+                            style: tt.labelSmall
+                                ?.copyWith(color: AppColors.textPrimary),
                           ),
-                          child: Text(
-                            isAvailable
-                                ? 'Disponible'
-                                : machine.status == 'IN_USE'
-                                    ? 'En cours'
-                                    : 'Indisp.',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: statusColor,
-                            ),
-                          ),
-                        ),
-                        if (distanceKm != null) ...[
-                          const SizedBox(width: 6),
+                          if (distanceKm != null)
+                            Text(' · ',
+                                style: tt.labelSmall?.copyWith(
+                                    color: AppColors.textSecondary)),
+                        ],
+                        if (distanceKm != null)
                           Text(
                             distanceKm! < 1
                                 ? '${(distanceKm! * 1000).toStringAsFixed(0)} m'
                                 : '${distanceKm!.toStringAsFixed(1)} km',
-                            style: const TextStyle(
-                                fontSize: 11, color: _slate),
+                            style: tt.bodySmall,
                           ),
-                        ],
                         const Spacer(),
-                        Text(
-                          '${machine.pricePerWash.toStringAsFixed(2).replaceAll('.', ',')} €',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: _blue,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm),
                           decoration: BoxDecoration(
-                            color: _blue,
-                            borderRadius: BorderRadius.circular(20),
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(
+                                AppSpacing.radiusFull),
                           ),
-                          child: const Text(
-                            'Réserver',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
+                          child: Text('Voir',
+                              style: tt.labelSmall?.copyWith(
+                                  color: AppColors.surface,
+                                  fontWeight: FontWeight.w700)),
                         ),
                       ],
                     ),
@@ -588,8 +508,9 @@ class _MachinePreviewCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Barre de recherche — deux états animés : idle / actif
+// _SearchBar — identique à l'originale
 // ─────────────────────────────────────────────────────────────────────────────
+
 class _SearchBar extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -611,42 +532,33 @@ class _SearchBar extends StatelessWidget {
     required this.onDismiss,
   });
 
-  static const _radius = 16.0;
-  static const _blue = Color(0xFF2563EB);
-  static const _slate = Color(0xFF64748B);
-  static const _border = Color(0xFFE2E8F0);
-
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
       height: 64,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_radius),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isActive ? 0.13 : 0.07),
-            blurRadius: isActive ? 30 : 14,
-            spreadRadius: isActive ? 1 : 0,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(
+          color: isActive ? AppColors.primary : AppColors.border,
+        ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(_radius),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
         child: Material(
-          color: Colors.white,
+          color: AppColors.surface,
           child: Stack(
             children: [
-              // ── Couche de base : icône gauche + TextField + bouton droit ──
               Positioned.fill(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                   child: Row(
                     children: [
-                      // Icône gauche
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 200),
                         transitionBuilder: (child, anim) => FadeTransition(
@@ -656,13 +568,15 @@ class _SearchBar extends StatelessWidget {
                             ? InkWell(
                                 key: const ValueKey('back'),
                                 onTap: onDismiss,
-                                borderRadius: BorderRadius.circular(20),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(8),
-                                  child: Icon(
-                                      Icons.arrow_back_ios_new_rounded,
-                                      size: 17,
-                                      color: _slate),
+                                borderRadius: BorderRadius.circular(
+                                    AppSpacing.radiusFull),
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.all(AppSpacing.sm),
+                                  child: const PhosphorIcon(
+                                      PhosphorIconsRegular.arrowLeft,
+                                      size: 18,
+                                      color: AppColors.textSecondary),
                                 ),
                               )
                             : Container(
@@ -671,45 +585,41 @@ class _SearchBar extends StatelessWidget {
                                 height: 34,
                                 decoration: const BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Color(0xFFEFF6FF),
+                                  color: AppColors.completedBg,
                                 ),
-                                child: const Icon(Icons.search_rounded,
-                                    size: 17, color: _blue),
+                                child: const Center(
+                                  child: PhosphorIcon(
+                                      PhosphorIconsRegular.magnifyingGlass,
+                                      size: 17,
+                                      color: AppColors.primary),
+                                ),
                               ),
                       ),
-                      const SizedBox(width: 10),
-                      // TextField — toujours dans l'arbre
+                      const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: TextField(
                           controller: controller,
                           focusNode: focusNode,
-                          cursorColor: _blue,
+                          cursorColor: AppColors.primary,
                           cursorWidth: 1.5,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             hintText: 'Paris, Évry, Lyon…',
-                            hintStyle: TextStyle(
-                              color: Color(0xFFCBD5E1),
-                              fontSize: 15,
-                              fontWeight: FontWeight.w400,
-                            ),
+                            hintStyle: tt.bodyLarge
+                                ?.copyWith(color: AppColors.border),
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: InputBorder.none,
                             isDense: false,
                             contentPadding:
-                                EdgeInsets.symmetric(vertical: 4),
+                                const EdgeInsets.symmetric(vertical: 4),
                           ),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            color: Color(0xFF0F172A),
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: tt.bodyLarge
+                              ?.copyWith(color: AppColors.textPrimary),
                           textInputAction: TextInputAction.search,
                           onSubmitted: onSubmitted,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      // Bouton droit : spinner / clear / filtre
+                      const SizedBox(width: AppSpacing.sm),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 200),
                         transitionBuilder: (child, anim) => FadeTransition(
@@ -721,42 +631,48 @@ class _SearchBar extends StatelessWidget {
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: _blue,
-                                ),
+                                    strokeWidth: 2,
+                                    color: AppColors.primary),
                               )
                             : hasQuery
-                            ? InkWell(
-                                key: const ValueKey('clear'),
-                                onTap: onClear,
-                                borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Color(0xFFF1F5F9),
+                                ? InkWell(
+                                    key: const ValueKey('clear'),
+                                    onTap: onClear,
+                                    borderRadius: BorderRadius.circular(
+                                        AppSpacing.radiusFull),
+                                    child: Container(
+                                      padding:
+                                          const EdgeInsets.all(AppSpacing.sm),
+                                      decoration: const BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppColors.inputBackground),
+                                      child: const PhosphorIcon(
+                                          PhosphorIconsRegular.x,
+                                          size: 13,
+                                          color: AppColors.textSecondary),
+                                    ),
+                                  )
+                                : Container(
+                                    key: const ValueKey('filter'),
+                                    padding:
+                                        const EdgeInsets.all(AppSpacing.sm),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border:
+                                          Border.all(color: AppColors.border),
+                                    ),
+                                    child: const PhosphorIcon(
+                                        PhosphorIconsRegular.slidersHorizontal,
+                                        size: 15,
+                                        color: AppColors.textSecondary),
                                   ),
-                                  child: const Icon(Icons.close_rounded,
-                                      size: 13, color: _slate),
-                                ),
-                              )
-                            : Container(
-                                key: const ValueKey('filter'),
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: _border),
-                                ),
-                                child: const Icon(Icons.tune_rounded,
-                                    size: 15, color: Color(0xFF475569)),
-                              ),
                       ),
                     ],
                   ),
                 ),
               ),
 
-              // ── Overlay idle : couvre le TextField, se retire au focus ──
+              // Overlay idle
               AnimatedOpacity(
                 opacity: isActive ? 0.0 : 1.0,
                 duration: const Duration(milliseconds: 180),
@@ -766,29 +682,18 @@ class _SearchBar extends StatelessWidget {
                     behavior: HitTestBehavior.opaque,
                     onTap: () => focusNode.requestFocus(),
                     child: Container(
-                      color: Colors.white,
+                      color: AppColors.surface,
                       padding: const EdgeInsets.only(left: 72, right: 16),
                       alignment: Alignment.centerLeft,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Où laver votre linge ?',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            "Autour de vous · N'importe quand",
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF94A3B8),
-                            ),
-                          ),
+                        children: [
+                          Text('Où laver votre linge ?',
+                              style: tt.titleSmall),
+                          const SizedBox(height: 2),
+                          Text("Autour de vous · N'importe quand",
+                              style: tt.bodySmall),
                         ],
                       ),
                     ),
@@ -799,6 +704,86 @@ class _SearchBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _NotifBell
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _NotifBell extends StatelessWidget {
+  const _NotifBell();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<String?>(
+      stream: FirebaseAuth.instance.authStateChanges().asyncExpand((user) {
+        if (user == null) return const Stream.empty();
+        return FirebaseFirestore.instance
+            .collection('notifications')
+            .where('userId', isEqualTo: user.uid)
+            .where('isRead', isEqualTo: false)
+            .snapshots()
+            .map((snap) {
+          if (snap.docs.isEmpty) return null;
+          return snap.docs.length > 9 ? '9+' : '${snap.docs.length}';
+        });
+      }),
+      builder: (context, snapshot) {
+        final badge = snapshot.data;
+        final tt = Theme.of(context).textTheme;
+        return GestureDetector(
+          onTap: () => context.push('/notifications'),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Center(
+                  child: PhosphorIcon(
+                    badge != null
+                        ? PhosphorIconsFill.bell
+                        : PhosphorIconsRegular.bell,
+                    size: 22,
+                    color: badge != null
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              if (badge != null)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    constraints:
+                        const BoxConstraints(minWidth: 16, minHeight: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusFull),
+                      border: Border.all(color: AppColors.surface, width: 1.5),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      badge,
+                      style: tt.labelSmall
+                          ?.copyWith(color: Colors.white, height: 1),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

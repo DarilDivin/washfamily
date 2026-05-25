@@ -5,24 +5,33 @@ class UserModel {
   final String firstName;
   final String lastName;
   final String phoneNumber;
+  final String? email;
   final List<String> roles; // ex: ['USER'], ['OWNER'], ['USER', 'OWNER'], ['ADMIN', 'OWNER']
   final DateTime createdAt;
   final String? currentSubscriptionId;
   final DateTime? subscriptionEndDate;
   final int remainingReservations;
+  final bool hasVerifiedBadge;
 
   UserModel({
     required this.uid,
     required this.firstName,
     required this.lastName,
     required this.phoneNumber,
+    this.email,
     List<String>? roles,
     DateTime? createdAt,
     this.currentSubscriptionId,
     this.subscriptionEndDate,
     this.remainingReservations = 2,
+    this.hasVerifiedBadge = false,
   })  : roles = roles ?? ['USER'],
         createdAt = createdAt ?? DateTime.now();
+
+  /// Premier contact disponible : email, sinon téléphone, sinon vide.
+  String get contact => (email?.isNotEmpty == true)
+      ? email!
+      : phoneNumber;
 
   factory UserModel.fromJson(Map<String, dynamic> json, String documentId) {
     // Lit 'roles' (List) ou 'role' (List ou String pour rétrocompat)
@@ -42,6 +51,7 @@ class UserModel {
       firstName: json['firstName'] ?? '',
       lastName: json['lastName'] ?? '',
       phoneNumber: json['phoneNumber'] ?? '',
+      email: json['email'] as String?,
       roles: parsedRoles,
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] as Timestamp).toDate()
@@ -51,6 +61,7 @@ class UserModel {
           ? (json['subscriptionEndDate'] as Timestamp).toDate()
           : null,
       remainingReservations: json['remainingReservations'] ?? 2,
+      hasVerifiedBadge: json['hasVerifiedBadge'] as bool? ?? false,
     );
   }
 
@@ -59,15 +70,23 @@ class UserModel {
       'firstName': firstName,
       'lastName': lastName,
       'phoneNumber': phoneNumber,
+      if (email != null && email!.isNotEmpty) 'email': email,
       'roles': roles,
       'createdAt': Timestamp.fromDate(createdAt),
       if (currentSubscriptionId != null) 'currentSubscriptionId': currentSubscriptionId,
       if (subscriptionEndDate != null) 'subscriptionEndDate': Timestamp.fromDate(subscriptionEndDate!),
       'remainingReservations': remainingReservations,
+      'hasVerifiedBadge': hasVerifiedBadge,
     };
   }
 
   bool get isOwner => roles.contains('OWNER');
   bool get isAdmin => roles.contains('ADMIN');
   bool get isUser => roles.contains('USER');
+
+  String? get currentPlanId => currentSubscriptionId;
+
+  bool get hasActiveSubscription =>
+      subscriptionEndDate != null &&
+      subscriptionEndDate!.isAfter(DateTime.now());
 }

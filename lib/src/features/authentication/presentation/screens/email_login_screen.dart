@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../data/services/auth_service.dart';
 import 'login_screen.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 class EmailLoginScreen extends StatefulWidget {
   const EmailLoginScreen({super.key});
@@ -16,6 +19,13 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
   bool _isLoading = false;
   bool _obscureText = true;
 
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _login() async {
     final email = _emailCtrl.text.trim();
     final pwd = _passwordCtrl.text.trim();
@@ -24,13 +34,18 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
     setState(() => _isLoading = true);
     try {
       final credential = await AuthService().signInWithEmail(email, pwd);
-      if (credential.user != null) {
-        if (!mounted) return;
+      if (credential.user != null && mounted) {
         await checkAuthRedirection(context, credential.user!);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -39,152 +54,238 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
+    final tt = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leadingWidth: 150,
-        leading: TextButton.icon(
+        foregroundColor: AppColors.textPrimary,
+        leading: IconButton(
+          icon: const PhosphorIcon(PhosphorIconsRegular.arrowLeft, size: 20),
           onPressed: () => context.pop(),
-          icon: Icon(Icons.arrow_back, color: theme.primaryColor, size: 18),
-          label: Text("WashFamily", style: TextStyle(color: theme.primaryColor, fontWeight: FontWeight.bold)),
         ),
+        title: Text('WashFamily',
+            style: tt.titleSmall?.copyWith(color: AppColors.primary)),
+        titleSpacing: 0,
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 40),
-               Text(
-                "Connectez-vous par\ne-mail",
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                  height: 1.2
-                ),
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.xxl),
+
               Text(
-                 "Heureux de vous revoir. Gérez votre linge en toute simplicité.",
-                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
-                  height: 1.5,
-                ),
+                'Connectez-vous par\ne-mail',
+                style: tt.headlineLarge?.copyWith(height: 1.2),
               ),
-              const SizedBox(height: 48),
-              
-              // Email Label
-              Text("ADRESSE E-MAIL", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey[700], letterSpacing: 1.5)),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: TextField(
-                  controller: _emailCtrl,
-                  decoration: InputDecoration(
-                    hintText: "nom@exemple.com",
-                    hintStyle: TextStyle(color: Colors.grey[400]),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Heureux de vous revoir. Gérez votre linge en toute simplicité.',
+                style: tt.bodyLarge
+                    ?.copyWith(color: AppColors.textSecondary, height: 1.5),
               ),
-              
-              const SizedBox(height: 24),
-              
-              // Password Label + Forgot
+              const SizedBox(height: AppSpacing.xxxl),
+
+              // ── Email ─────────────────────────────────────────────────
+              Text('ADRESSE E-MAIL',
+                  style: tt.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                      letterSpacing: 1.5)),
+              const SizedBox(height: AppSpacing.sm),
+              _InputField(
+                controller: _emailCtrl,
+                hint: 'nom@exemple.com',
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+              ),
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // ── Mot de passe ──────────────────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("MOT DE PASSE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey[700], letterSpacing: 1.5)),
+                  Text('MOT DE PASSE',
+                      style: tt.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                          letterSpacing: 1.5)),
                   TextButton(
                     onPressed: () {},
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                    child: Text("MOT DE PASSE OUBLIÉ?", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: theme.primaryColor)),
-                  )
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: Text('MOT DE PASSE OUBLIÉ?',
+                        style: tt.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                            fontSize: 10)),
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: TextField(
-                  controller: _passwordCtrl,
-                  decoration: InputDecoration(
-                    hintText: "••••••••",
-                    hintStyle: TextStyle(color: Colors.grey[400]),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    suffixIcon: IconButton(
-                      icon: Icon(_obscureText ? Icons.visibility : Icons.visibility_off, color: Colors.grey[500]),
-                      onPressed: () => setState(() => _obscureText = !_obscureText),
-                    ),
+              const SizedBox(height: AppSpacing.sm),
+              _InputField(
+                controller: _passwordCtrl,
+                hint: '••••••••',
+                obscureText: _obscureText,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _login(),
+                suffixIcon: IconButton(
+                  icon: PhosphorIcon(
+                    _obscureText
+                        ? PhosphorIconsRegular.eye
+                        : PhosphorIconsRegular.eyeSlash,
+                    size: 18,
+                    color: AppColors.textSecondary,
                   ),
-                  obscureText: _obscureText,
+                  onPressed: () =>
+                      setState(() => _obscureText = !_obscureText),
                 ),
               ),
 
-              const SizedBox(height: 32),
-              
+              const SizedBox(height: AppSpacing.xxl),
+
               _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : FilledButton(
-                    onPressed: _login,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                          color: AppColors.primary))
+                  : FilledButton(
+                      onPressed: _login,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.lg),
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppSpacing.radiusMd)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Se connecter'),
                     ),
-                    child: const Text("Se connecter", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-              
-              const SizedBox(height: 24),
-              
+
+              const SizedBox(height: AppSpacing.xl),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Pas encore de compte ? "),
-                  GestureDetector(
-                    onTap: () => context.push('/register'),
-                    child: Text("S'inscrire", style: TextStyle(fontWeight: FontWeight.bold, color: theme.primaryColor)),
-                  )
+                  Text("Pas encore de compte ? ", style: tt.bodyMedium),
+                  TextButton(
+                    onPressed: () => context.push('/register'),
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    child: Text("S'inscrire",
+                        style: tt.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary)),
+                  ),
                 ],
               ),
-              
-              const Spacer(),
-              
-              // Footer
-              Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text("Privacy Policy", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                    const SizedBox(width: 16),
-                    Text("Terms of Service", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                    const SizedBox(width: 16),
-                    Text("Legal", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: Text("© 2024 WashFamily. All rights reserved.", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-              ),
-              const SizedBox(height: 16),
+
+              const SizedBox(height: AppSpacing.xxxl),
+              const _Footer(),
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _InputField
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InputField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final bool obscureText;
+  final Widget? suffixIcon;
+  final ValueChanged<String>? onSubmitted;
+
+  const _InputField({
+    required this.controller,
+    required this.hint,
+    this.keyboardType,
+    this.textInputAction,
+    this.obscureText = false,
+    this.suffixIcon,
+    this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      obscureText: obscureText,
+      onSubmitted: onSubmitted,
+      style: tt.bodyLarge,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: tt.bodyLarge?.copyWith(color: AppColors.textSecondary),
+        filled: true,
+        fillColor: AppColors.inputBackground,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+          borderSide:
+              const BorderSide(color: AppColors.primary, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.lg),
+        suffixIcon: suffixIcon,
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _Footer
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Footer extends StatelessWidget {
+  const _Footer();
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final style = tt.labelSmall?.copyWith(
+        color: AppColors.textSecondary, fontSize: 10);
+    return Column(children: [
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text('Privacy Policy', style: style),
+        const SizedBox(width: AppSpacing.lg),
+        Text('Terms of Service', style: style),
+        const SizedBox(width: AppSpacing.lg),
+        Text('Legal', style: style),
+      ]),
+      const SizedBox(height: AppSpacing.xs),
+      Text('© 2025 WashFamily. All rights reserved.',
+          textAlign: TextAlign.center, style: style),
+      const SizedBox(height: AppSpacing.lg),
+    ]);
   }
 }

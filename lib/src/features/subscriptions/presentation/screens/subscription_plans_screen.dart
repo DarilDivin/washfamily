@@ -1,18 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../data/subscription_repository.dart';
 import '../../domain/models/subscription_plan_model.dart';
-import '../../../authentication/domain/models/user_model.dart';
 import '../../../authentication/data/providers/user_provider.dart';
+import '../../../authentication/domain/models/user_model.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 // ── Providers ────────────────────────────────────────────────────────────────
 
+/// Tous les plans actifs — utilisé par AdminSubscriptionsScreen.
 final activePlansProvider = FutureProvider<List<SubscriptionPlanModel>>((ref) {
   return ref.read(subscriptionRepositoryProvider).getActivePlans();
 });
+
+final _plansByRoleProvider =
+    FutureProvider.family<List<SubscriptionPlanModel>, String>(
+  (ref, role) =>
+      ref.read(subscriptionRepositoryProvider).getPlansByRole(role),
+);
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
@@ -21,27 +30,33 @@ class SubscriptionPlansScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final plansAsync = ref.watch(activePlansProvider);
-    final userAsync  = ref.watch(currentUserProvider);
+    final tt = Theme.of(context).textTheme;
+    final userAsync = ref.watch(currentUserProvider);
+    final user = userAsync.valueOrNull;
+    final role = user?.isOwner == true ? 'OWNER' : 'USER';
+    final plansAsync = ref.watch(_plansByRoleProvider(role));
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text('Abonnements',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-        backgroundColor: Colors.white,
+        title: Text('Choisissez votre plan', style: tt.titleLarge),
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        foregroundColor: const Color(0xFF0F172A),
+        foregroundColor: AppColors.textPrimary,
         surfaceTintColor: Colors.transparent,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+          child: Divider(height: 1, color: AppColors.border),
         ),
       ),
       body: plansAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Erreur : $e')),
-        data: (plans) => _Body(plans: plans, userAsync: userAsync),
+        loading: () => const Center(
+            child: CircularProgressIndicator(color: AppColors.primary)),
+        error: (e, _) => Center(
+          child: Text('Erreur : $e',
+              style: tt.bodyMedium?.copyWith(color: AppColors.error)),
+        ),
+        data: (plans) => _Body(plans: plans, user: user, role: role),
       ),
     );
   }
@@ -51,386 +66,291 @@ class SubscriptionPlansScreen extends ConsumerWidget {
 
 class _Body extends ConsumerWidget {
   final List<SubscriptionPlanModel> plans;
-  final AsyncValue<UserModel?> userAsync;
+  final UserModel? user;
+  final String role;
 
-  const _Body({required this.plans, required this.userAsync});
+  const _Body({required this.plans, required this.user, required this.role});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = userAsync.valueOrNull;
-    final activePlanId = user?.currentSubscriptionId;
-    final activePlan = activePlanId != null
-        ? plans.where((p) => p.id == activePlanId).firstOrNull
-        : null;
+    final tt = Theme.of(context).textTheme;
+    final maxPrice = plans.isEmpty
+        ? 0.0
+        : plans.map((p) => p.price).reduce((a, b) => a > b ? a : b);
+
+    final subtitle = role == 'OWNER'
+        ? 'Développez votre activité de laverie'
+        : 'Accédez à plus de réservations chaque mois';
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        // ── Statut actuel ───────────────────────────────────────
-        if (userAsync.isLoading)
-          const _SkeletonCard()
-        else if (activePlan != null && user != null)
-          _CurrentPlanCard(plan: activePlan, user: user)
-        else
-          _FreeTierCard(remaining: user?.remainingReservations ?? 2),
+        const SizedBox(height: AppSpacing.sm),
+        Text('Choisissez votre plan', style: tt.headlineLarge),
+        const SizedBox(height: AppSpacing.xs),
+        Text(subtitle,
+            style: tt.bodyMedium?.copyWith(color: AppColors.textSecondary)),
+        const SizedBox(height: AppSpacing.xl),
 
-        const SizedBox(height: 32),
-
-        // ── Titre section plans ─────────────────────────────────
-        const Text('Choisissez une formule',
-            style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF0F172A))),
-        const SizedBox(height: 4),
-        const Text('Sans engagement · Renouvelable chaque mois',
-            style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8))),
-        const SizedBox(height: 20),
-
-        // ── Cartes de plans ─────────────────────────────────────
         ...plans.map((plan) => _PlanCard(
               plan: plan,
-              isActive: plan.id == activePlanId,
+              user: user,
+              isPopular: plan.price == maxPrice,
             )),
 
-        const SizedBox(height: 12),
-        Center(
-          child: TextButton(
-            onPressed: () => context.pop(),
-            child: const Text('Plus tard',
-                style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF94A3B8),
-                    fontWeight: FontWeight.w500)),
-          ),
-        ),
-        const SizedBox(height: 8),
+        const SizedBox(height: AppSpacing.xl),
       ],
     );
   }
 }
 
-// ── Carte statut actuel ───────────────────────────────────────────────────────
+// ── Plan card ────────────────────────────────────────────────────────────────
 
-class _CurrentPlanCard extends StatelessWidget {
+class _PlanCard extends ConsumerStatefulWidget {
   final SubscriptionPlanModel plan;
-  final UserModel user;
+  final UserModel? user;
+  final bool isPopular;
 
-  const _CurrentPlanCard({required this.plan, required this.user});
+  const _PlanCard({
+    required this.plan,
+    required this.user,
+    required this.isPopular,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    final remaining = user.remainingReservations;
-    final total     = plan.maxReservationsPerMonth;
-    final progress  = total > 0 ? (remaining / total).clamp(0.0, 1.0) : 0.0;
-    final expiry    = user.subscriptionEndDate;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // En-tête
-          Row(
-            children: [
-              const Text('Votre formule',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF64748B))),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text('Actif',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Nom du plan
-          Text(plan.name.toUpperCase(),
-              style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                  color: Color(0xFF0F172A))),
-
-          if (expiry != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Expire le ${DateFormat("d MMMM yyyy", "fr").format(expiry)}',
-              style: const TextStyle(
-                  fontSize: 13, color: Color(0xFF94A3B8)),
-            ),
-          ],
-
-          const SizedBox(height: 20),
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-          const SizedBox(height: 16),
-
-          // Réservations restantes
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Réservations restantes',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF374151))),
-              Text('$remaining / $total',
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A))),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
-              backgroundColor: const Color(0xFFE2E8F0),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                progress > 0.3
-                    ? const Color(0xFF0F172A)
-                    : const Color(0xFFEF4444),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  ConsumerState<_PlanCard> createState() => _PlanCardState();
 }
 
-// ── Carte tier gratuit ────────────────────────────────────────────────────────
+class _PlanCardState extends ConsumerState<_PlanCard> {
+  bool _activating = false;
 
-class _FreeTierCard extends StatelessWidget {
-  final int remaining;
-  const _FreeTierCard({required this.remaining});
+  bool get _isActive =>
+      widget.user?.currentSubscriptionId == widget.plan.id &&
+      (widget.user?.hasActiveSubscription ?? false);
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Aucun abonnement actif',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF0F172A))),
-                const SizedBox(height: 4),
-                Text('$remaining réservation${remaining > 1 ? 's' : ''} gratuite${remaining > 1 ? 's' : ''} disponible${remaining > 1 ? 's' : ''}',
-                    style: const TextStyle(
-                        fontSize: 13, color: Color(0xFF64748B))),
-              ],
-            ),
-          ),
-        ],
-      ),
+  Future<void> _confirmActivation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _ConfirmDialog(plan: widget.plan),
     );
-  }
-}
+    if (confirmed != true || !mounted) return;
 
-// ── Carte plan ────────────────────────────────────────────────────────────────
-
-class _PlanCard extends ConsumerWidget {
-  final SubscriptionPlanModel plan;
-  final bool isActive;
-
-  const _PlanCard({required this.plan, required this.isActive});
-
-  Future<void> _subscribe(BuildContext context, WidgetRef ref) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
+    setState(() => _activating = true);
     try {
-      await ref.read(subscriptionRepositoryProvider).subscribeUserToPlan(uid, plan);
-      if (context.mounted) {
-        Navigator.pop(context);
-        ref.invalidate(activePlansProvider);
-        ref.invalidate(currentUserProvider);
+      await ref
+          .read(subscriptionRepositoryProvider)
+          .activatePlan(userId: uid, plan: widget.plan);
+      ref.invalidate(currentUserProvider);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Abonnement ${plan.name} activé.'),
+          content: Text('Plan ${widget.plan.name} activé avec succès !'),
           behavior: SnackBarBehavior.floating,
         ));
       }
     } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Erreur : $e'),
+          backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
         ));
       }
+    } finally {
+      if (mounted) setState(() => _activating = false);
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isActive
-              ? const Color(0xFF0F172A)
-              : const Color(0xFFE2E8F0),
-          width: isActive ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // En-tête : nom + prix
-          Row(
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final plan = widget.plan;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(
+              bottom: AppSpacing.md, top: AppSpacing.sm),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+            border: Border.all(
+              color: widget.isPopular ? AppColors.primary : AppColors.border,
+              width: widget.isPopular ? 2 : 1,
+            ),
+          ),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(plan.name.toUpperCase(),
-                    style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                        color: Color(0xFF64748B))),
-              ),
+              // Nom
+              Text(plan.name, style: tt.titleLarge),
+              const SizedBox(height: AppSpacing.xs),
+
+              // Prix
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text(
-                    plan.price == 0
-                        ? 'Gratuit'
-                        : '${plan.price.toStringAsFixed(0)} €',
-                    style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A)),
+                    '${plan.price.toStringAsFixed(2)} €',
+                    style:
+                        tt.headlineLarge?.copyWith(color: AppColors.primary),
                   ),
-                  if (plan.price > 0)
-                    const Text(' / mois',
-                        style: TextStyle(
-                            fontSize: 13, color: Color(0xFF94A3B8))),
+                  const SizedBox(width: 4),
+                  Text(' / mois',
+                      style: tt.bodyMedium
+                          ?.copyWith(color: AppColors.textSecondary)),
                 ],
               ),
-            ],
-          ),
 
-          const SizedBox(height: 6),
-          Text(
-            '${plan.maxReservationsPerMonth} réservation${plan.maxReservationsPerMonth > 1 ? 's' : ''} par mois',
-            style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF374151)),
-          ),
+              const SizedBox(height: AppSpacing.md),
+              const Divider(height: 1, color: AppColors.border),
+              const SizedBox(height: AppSpacing.md),
 
-          if (plan.features.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            ...plan.features.map((f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              // Features
+              ...plan.features.map((f) => Padding(
+                    padding:
+                        const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const PhosphorIcon(
+                            PhosphorIconsRegular.checkCircle,
+                            size: 16,
+                            color: AppColors.success),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(f,
+                              style: tt.bodyMedium?.copyWith(
+                                  color: AppColors.textSecondary)),
+                        ),
+                      ],
+                    ),
+                  )),
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // CTA
+              if (_isActive) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.confirmedBg,
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                  child: Column(
                     children: [
-                      const Icon(Icons.check,
-                          size: 16, color: Color(0xFF64748B)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(f,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF64748B))),
-                      ),
+                      Text('Plan actuel',
+                          style: tt.labelLarge?.copyWith(
+                              color: AppColors.confirmedText,
+                              fontWeight: FontWeight.w700),
+                          textAlign: TextAlign.center),
+                      if (widget.user?.subscriptionEndDate != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Expire le ${DateFormat("d MMMM yyyy", "fr").format(widget.user!.subscriptionEndDate!)}',
+                          style: tt.labelSmall?.copyWith(
+                              color: AppColors.confirmedText),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ],
                   ),
-                )),
-          ],
-
-          const SizedBox(height: 20),
-
-          // CTA
-          if (isActive)
-            Row(
-              children: const [
-                Icon(Icons.check_circle_rounded,
-                    size: 16, color: Color(0xFF0F172A)),
-                SizedBox(width: 6),
-                Text('Plan actuel',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF0F172A))),
-              ],
-            )
-          else
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () => _subscribe(context, ref),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF0F172A),
-                  side: const BorderSide(color: Color(0xFF0F172A)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
                 ),
-                child: const Text('Souscrire',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14)),
+              ] else
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: _activating ? null : _confirmActivation,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.lg),
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                              AppSpacing.radiusMd)),
+                    ),
+                    child: _activating
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: AppColors.surface, strokeWidth: 2))
+                        : const Text('Activer ce plan'),
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        // Badge "Populaire"
+        if (widget.isPopular)
+          Positioned(
+            top: 0,
+            right: AppSpacing.md,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
               ),
+              child: Text('Populaire',
+                  style: tt.labelSmall?.copyWith(
+                      color: AppColors.surface,
+                      fontWeight: FontWeight.w700)),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
 
-// ── Skeleton loader ───────────────────────────────────────────────────────────
+// ── Dialog de confirmation ───────────────────────────────────────────────────
 
-class _SkeletonCard extends StatelessWidget {
-  const _SkeletonCard();
+class _ConfirmDialog extends StatelessWidget {
+  final SubscriptionPlanModel plan;
+  const _ConfirmDialog({required this.plan});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 100,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(16),
+    final tt = Theme.of(context).textTheme;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusLg)),
+      title: Text("Confirmer l'abonnement", style: tt.titleMedium),
+      content: Text(
+        'Vous êtes sur le point d\'activer le plan ${plan.name} '
+        'pour ${plan.price.toStringAsFixed(2)} €/mois.\n\n'
+        '(Simulation — aucun paiement réel)',
+        style: tt.bodyMedium?.copyWith(color: AppColors.textSecondary),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text('Annuler',
+              style: tt.labelLarge
+                  ?.copyWith(color: AppColors.textSecondary)),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            shape: RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(AppSpacing.radiusMd)),
+          ),
+          child: Text('Confirmer',
+              style: tt.labelLarge?.copyWith(color: AppColors.surface)),
+        ),
+      ],
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -5,8 +6,10 @@ import 'package:washfamily/src/features/authentication/presentation/screens/emai
 import 'package:washfamily/src/features/authentication/presentation/screens/phone_login_screen.dart';
 import 'package:washfamily/src/features/home/presentation/screens/home_screen.dart';
 import 'package:washfamily/src/features/splash/presentation/splash_screen.dart';
+import '../features/messaging/presentation/screens/conversations_list_screen.dart';
+import '../features/messaging/presentation/screens/conversation_screen.dart';
 
-// import '../features/authentication/data/auth_repository.dart';
+import '../features/authentication/data/auth_repository.dart';
 import '../features/authentication/presentation/screens/login_screen.dart';
 import '../features/authentication/presentation/screens/otp_screen.dart';
 import '../features/authentication/presentation/screens/profile_setup_screen.dart';
@@ -16,7 +19,8 @@ import '../features/booking/presentation/screens/booking_summary_screen.dart';
 import '../features/booking/presentation/screens/bookings_screen.dart';
 import '../features/home/presentation/screens/main_scaffold.dart';
 import '../features/user_profile/presentation/screens/profile_screen.dart';
-import '../features/user_profile/presentation/screens/add_machine_screen.dart';
+import '../features/user_profile/presentation/screens/add_machine_screen.dart'
+    as profile_screens;
 import '../features/user_profile/presentation/screens/my_machines_screen.dart';
 import '../features/user_profile/presentation/screens/profile_subscreens.dart';
 import '../features/shop/presentation/screens/shop_screen.dart';
@@ -25,51 +29,145 @@ import '../features/admin/presentation/screens/admin_dashboard_screen.dart';
 import '../features/admin/presentation/screens/admin_subscriptions_screen.dart';
 import '../features/admin/presentation/screens/manage_products_screen.dart';
 import '../features/subscriptions/presentation/screens/subscription_plans_screen.dart';
+import '../features/reviews/presentation/screens/leave_review_screen.dart';
 import '../features/shop/presentation/screens/cart_screen.dart';
 import '../features/machines_map/domain/models/machine_model.dart';
 import '../dev/dev_seed_screen.dart';
 import '../features/machines_map/presentation/screens/machine_detail_screen.dart';
+import '../features/machines_map/presentation/screens/add_machine_screen.dart';
+import '../features/laundries/presentation/screens/laundry_detail_screen.dart';
+import '../features/laundries/presentation/screens/create_laundry_screen.dart';
+import '../features/laundries/presentation/screens/edit_laundry_screen.dart';
+import '../features/laundries/presentation/screens/add_product_screen.dart';
+import '../features/machines_map/presentation/screens/edit_machine_screen.dart';
+import '../features/user_profile/presentation/screens/become_owner_screen.dart';
+import '../features/user_profile/presentation/screens/owner_dashboard_screen.dart';
 import '../features/booking/presentation/screens/booking_success_screen.dart';
 import '../features/booking/presentation/screens/owner_bookings_screen.dart';
 import '../features/booking/domain/models/reservation_model.dart';
 
 part 'router_config.g.dart';
 
+// Routes accessibles sans être connecté
+const _publicPaths = {
+  '/',
+  '/login',
+  '/login/phone',
+  '/login/email',
+  '/otp',
+  '/profile-setup',
+  '/register',
+  '/dev/seed',
+};
+
+// Routes réservées aux utilisateurs non connectés (redirection si déjà auth)
+const _authOnlyPaths = {
+  '/login',
+  '/login/phone',
+  '/login/email',
+  '/register',
+};
+
 @riverpod
 GoRouter router(RouterRef ref) {
-  // final authState = ref.watch(authStateChangesProvider);
+  final authState = ref.watch(authStateChangesProvider);
 
   return GoRouter(
     initialLocation: '/',
-    // refreshListenable: GoRouterRefreshStream(
-    //   ref.watch(authStateChangesProvider.stream),
-    // ),
-    // redirect: (context, state) {
-    //   final isLoggedIn = authState.asData?.value != null;
-    //   final isLoggingIn =
-    //       state.uri.path == '/login' ||
-    //       state.uri.path == '/register' ||
-    //       state.uri.path == '/otp' ||
-    //       state.uri.path == '/profile-setup';
+    refreshListenable: GoRouterRefreshStream(
+      FirebaseAuth.instance.authStateChanges(),
+    ),
+    redirect: (context, state) {
+      final isLoading = authState.isLoading;
+      final isLoggedIn = authState.asData?.value != null;
+      final path = state.uri.path;
 
-    //   if (!isLoggedIn && !isLoggingIn) {
-    //     return '/login';
-    //   }
+      // Pendant l'init Firebase Auth, on reste sur le splash
+      if (isLoading) return path == '/' ? null : '/';
 
-    //   if (isLoggedIn && isLoggingIn) {
-    //     return '/';
-    //   }
+      // Non connecté → renvoyer vers /login sauf routes publiques
+      if (!isLoggedIn && !_publicPaths.contains(path)) return '/login';
 
-    //   return null;
-    // },
+      // Connecté → ne pas laisser sur les pages de connexion
+      if (isLoggedIn && _authOnlyPaths.contains(path)) return '/home';
+
+      return null;
+    },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
       GoRoute(path: '/dev/seed', builder: (context, state) => const DevSeedScreen()),
+      // ── Propriétaire ──────────────────────────────────────────────────────
+      GoRoute(
+        path: '/become-owner',
+        builder: (context, state) => const BecomeOwnerScreen(),
+      ),
+      GoRoute(
+        path: '/owner-dashboard',
+        builder: (context, state) => const OwnerDashboardScreen(),
+      ),
+      // ── Laveries ──────────────────────────────────────────────────────────
+      GoRoute(
+        path: '/laundry/create',
+        builder: (context, state) => const CreateLaundryScreen(),
+      ),
+      GoRoute(
+        path: '/laundry/edit/:laundryId',
+        builder: (context, state) {
+          final laundryId = state.pathParameters['laundryId']!;
+          return EditLaundryScreen(laundryId: laundryId);
+        },
+      ),
+      GoRoute(
+        path: '/laundry/:laundryId',
+        builder: (context, state) {
+          final laundryId = state.pathParameters['laundryId']!;
+          return LaundryDetailScreen(laundryId: laundryId);
+        },
+        routes: [
+          // Littéraux en premier — GoRouter matche dans l'ordre de déclaration
+          GoRoute(
+            path: 'products/add',
+            builder: (context, state) {
+              final laundryId = state.pathParameters['laundryId']!;
+              return AddProductScreen(laundryId: laundryId);
+            },
+          ),
+          GoRoute(
+            path: 'machine/add',
+            builder: (context, state) {
+              final laundryId = state.pathParameters['laundryId']!;
+              return AddMachineScreen(laundryId: laundryId);
+            },
+          ),
+          GoRoute(
+            path: 'machine/edit',
+            builder: (context, state) {
+              final extra = state.extra as Map<String, String>;
+              return EditMachineScreen(
+                laundryId: extra['laundryId']!,
+                machineId: extra['machineId']!,
+              );
+            },
+          ),
+          // Paramétrique en dernier
+          GoRoute(
+            path: 'machine/:machineId',
+            builder: (context, state) {
+              final laundryId = state.pathParameters['laundryId']!;
+              final machineId = state.pathParameters['machineId']!;
+              return MachineDetailScreen(
+                  laundryId: laundryId, machineId: machineId);
+            },
+          ),
+        ],
+      ),
+      // ── Ancienne route machine (rétro-compat) ──────────────────────────────
       GoRoute(
         path: '/machine/:id',
         builder: (context, state) {
           final machine = state.extra as MachineModel;
-          return MachineDetailScreen(machine: machine);
+          return MachineDetailScreen(
+              laundryId: machine.laundryId, machineId: machine.id);
         },
       ),
       // ── Tunnel réservation ────────────────────────────────────────────
@@ -145,6 +243,24 @@ GoRouter router(RouterRef ref) {
         path: '/admin/subscriptions',
         builder: (context, state) => const AdminSubscriptionsScreen(),
       ),
+      GoRoute(
+        path: '/reviews/new',
+        builder: (context, state) {
+          final reservation = state.extra as ReservationModel;
+          return LeaveReviewScreen(reservation: reservation);
+        },
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/messages/:conversationId',
+        builder: (context, state) {
+          final conversationId = state.pathParameters['conversationId']!;
+          return ConversationScreen(conversationId: conversationId);
+        },
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return MainScaffold(navigationShell: navigationShell);
@@ -184,8 +300,8 @@ GoRouter router(RouterRef ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/notifications',
-                builder: (context, state) => const NotificationsScreen(),
+                path: '/messages',
+                builder: (context, state) => const ConversationsListScreen(),
               ),
             ],
           ),
@@ -196,12 +312,12 @@ GoRouter router(RouterRef ref) {
                 builder: (context, state) => const ProfileScreen(),
                 routes: [
                    GoRoute(path: 'my-machines', builder: (context, state) => const MyMachinesScreen()),
-                   GoRoute(path: 'add-machine', builder: (context, state) => const AddMachineScreen()),
+                   GoRoute(path: 'add-machine', builder: (context, state) => const profile_screens.AddMachineScreen()),
                    GoRoute(
                      path: 'edit-machine',
                      builder: (context, state) {
                        final machine = state.extra as MachineModel;
-                       return EditMachineScreen(machine: machine);
+                       return profile_screens.EditMachineScreen(machine: machine);
                      },
                    ),
                    GoRoute(path: 'favorites', builder: (context, state) => const FavoritesScreen()),

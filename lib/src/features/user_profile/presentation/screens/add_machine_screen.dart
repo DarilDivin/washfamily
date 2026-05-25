@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../features/machines_map/domain/models/machine_model.dart';
+import '../../../../features/machines_map/domain/models/wash_program_model.dart';
 import '../../../../features/machines_map/data/repositories/firestore_machine_repository.dart';
 
 class AddMachineScreen extends StatefulWidget {
@@ -30,6 +31,9 @@ class _AddMachineScreenState extends State<AddMachineScreen> {
   bool _detergentIncluded = false;
   bool _isLoading = false;
   bool _isGeocoding = false;
+
+  // ── Programmes de lavage ──────────────────────────────────
+  final List<WashProgram> _programs = [];
 
   // ── Photos ────────────────────────────────────────────────
   final List<XFile> _selectedImages = [];
@@ -59,6 +63,26 @@ class _AddMachineScreenState extends State<AddMachineScreen> {
   void dispose() {
     _addressCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _addProgram() async {
+    final program = await showDialog<WashProgram>(
+      context: context,
+      builder: (ctx) => const _ProgramDialog(),
+    );
+    if (program != null && mounted) {
+      setState(() => _programs.add(program));
+    }
+  }
+
+  Future<void> _editProgram(int index) async {
+    final program = await showDialog<WashProgram>(
+      context: context,
+      builder: (ctx) => _ProgramDialog(existing: _programs[index]),
+    );
+    if (program != null && mounted) {
+      setState(() => _programs[index] = program);
+    }
   }
 
   // ── Sélection des photos ──────────────────────────────────
@@ -212,6 +236,7 @@ class _AddMachineScreenState extends State<AddMachineScreen> {
         availableDays: _availableDays.toList()..sort(),
         startTimeHour: _startHour,
         endTimeHour: _endHour,
+        programs: _programs,
       );
 
       await FirestoreMachineRepository().addMachine(newMachine);
@@ -784,6 +809,46 @@ class _AddMachineScreenState extends State<AddMachineScreen> {
               ),
             ),
 
+            const SizedBox(height: 16),
+
+            // ── Programmes de lavage ───────────────────────────
+            _SectionCard(
+              title: 'PROGRAMMES DE LAVAGE',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Définissez les programmes disponibles sur votre machine.',
+                    style: GoogleFonts.inter(fontSize: 12, color: _slateGray),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._programs.asMap().entries.map((e) => _ProgramTile(
+                        program: e.value,
+                        onEdit: () => _editProgram(e.key),
+                        onDelete: () =>
+                            setState(() => _programs.removeAt(e.key)),
+                      )),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Ajouter un programme'),
+                      onPressed: _addProgram,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _primaryColor,
+                        side: const BorderSide(color: Color(0xFFBFDBFE)),
+                        backgroundColor: const Color(0xFFEFF6FF),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 100),
           ],
         ),
@@ -1232,6 +1297,9 @@ class _EditMachineScreenState extends State<EditMachineScreen> {
   bool _isGeocoding = false;
   String _machineStatus = 'AVAILABLE';
 
+  // ── Programmes & Options de service ──────────────────────
+  late List<WashProgram> _programs;
+
   // ── Photos ────────────────────────────────────────────────
   late List<String> _existingPhotoUrls;
   final List<XFile> _newImages = [];
@@ -1270,6 +1338,7 @@ class _EditMachineScreenState extends State<EditMachineScreen> {
     _endHour = m.endTimeHour;
     _existingPhotoUrls = List.from(m.photoUrls);
     _machineStatus = m.status;
+    _programs = List.from(m.programs);
     _addressCtrl.text = m.address ?? '';
     _latitude = m.latitude != 0.0 ? m.latitude : null;
     _longitude = m.longitude != 0.0 ? m.longitude : null;
@@ -1283,6 +1352,26 @@ class _EditMachineScreenState extends State<EditMachineScreen> {
     _brandCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _addProgram() async {
+    final program = await showDialog<WashProgram>(
+      context: context,
+      builder: (ctx) => const _ProgramDialog(),
+    );
+    if (program != null && mounted) {
+      setState(() => _programs.add(program));
+    }
+  }
+
+  Future<void> _editProgram(int index) async {
+    final program = await showDialog<WashProgram>(
+      context: context,
+      builder: (ctx) => _ProgramDialog(existing: _programs[index]),
+    );
+    if (program != null && mounted) {
+      setState(() => _programs[index] = program);
+    }
   }
 
   // ── Parsers description ───────────────────────────────────
@@ -1447,6 +1536,9 @@ class _EditMachineScreenState extends State<EditMachineScreen> {
           'lat': _latitude,
           'lng': _longitude,
           'address': _resolvedAddress ?? _addressCtrl.text.trim(),
+        },
+        'service': {
+          'programs': _programs.map((p) => p.toJson()).toList(),
         },
       };
 
@@ -1726,6 +1818,45 @@ class _EditMachineScreenState extends State<EditMachineScreen> {
                       validator: (v) => v == null || v.trim().isEmpty
                           ? 'Champ requis'
                           : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Programmes de lavage ─────────────────────────
+            _SectionCard(
+              title: 'PROGRAMMES DE LAVAGE',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Définissez les programmes disponibles sur votre machine.',
+                    style: GoogleFonts.inter(fontSize: 12, color: _slateGray),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._programs.asMap().entries.map((e) => _ProgramTile(
+                        program: e.value,
+                        onEdit: () => _editProgram(e.key),
+                        onDelete: () =>
+                            setState(() => _programs.removeAt(e.key)),
+                      )),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Ajouter un programme'),
+                      onPressed: _addProgram,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _primaryColor,
+                        side: const BorderSide(color: Color(0xFFBFDBFE)),
+                        backgroundColor: const Color(0xFFEFF6FF),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
                     ),
                   ),
                 ],
@@ -2095,6 +2226,275 @@ class _EditMachineScreenState extends State<EditMachineScreen> {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// _ProgramTile — affiche un programme dans la liste
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _ProgramTile extends StatelessWidget {
+  final WashProgram program;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _ProgramTile(
+      {required this.program, required this.onEdit, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    final spinInfo = program.hasSpin
+        ? (program.spinSpeedRpm != null
+            ? '${program.spinSpeedRpm} tr/min'
+            : 'Essorage')
+        : 'Sans essorage';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '${program.temperatureCelsius}°',
+            style: GoogleFonts.outfit(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: const Color(0xFF2563EB)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+            Text(program.name,
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700, fontSize: 13)),
+            Text(
+              '${program.durationMinutes} min · $spinInfo'
+              '${program.isDelicate ? ' · Délicat' : ''}',
+              style: GoogleFonts.inter(
+                  fontSize: 11, color: const Color(0xFF64748B)),
+            ),
+          ]),
+        ),
+        IconButton(
+          icon: const Icon(Icons.edit_outlined,
+              size: 18, color: Color(0xFF2563EB)),
+          onPressed: onEdit,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+        const SizedBox(width: 4),
+        IconButton(
+          icon: const Icon(Icons.delete_outline,
+              size: 18, color: Color(0xFFDC2626)),
+          onPressed: onDelete,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+      ]),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// _ProgramDialog — dialogue d'ajout / modification d'un programme
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _ProgramDialog extends StatefulWidget {
+  final WashProgram? existing;
+  const _ProgramDialog({this.existing});
+
+  @override
+  State<_ProgramDialog> createState() => _ProgramDialogState();
+}
+
+class _ProgramDialogState extends State<_ProgramDialog> {
+  late final TextEditingController _nameCtrl;
+  late int _temperature;
+  late int _duration;
+  late bool _hasSpin;
+  late int _spinSpeedRpm;
+  late bool _isDelicate;
+
+  static const _temps = [20, 30, 40, 60, 90];
+  static const _spinSpeeds = [800, 1000, 1200, 1400];
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.existing;
+    _nameCtrl = TextEditingController(text: p?.name ?? '');
+    _temperature = p?.temperatureCelsius ?? 40;
+    _duration = p?.durationMinutes ?? 60;
+    _hasSpin = p?.hasSpin ?? true;
+    _spinSpeedRpm = p?.spinSpeedRpm ?? 1000;
+    _isDelicate = p?.isDelicate ?? false;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isNew = widget.existing == null;
+
+    return AlertDialog(
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(
+        isNew ? 'Ajouter un programme' : 'Modifier le programme',
+        style:
+            GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Nom
+            _FieldLabel('Nom du programme'),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TextField(
+                controller: _nameCtrl,
+                textCapitalization: TextCapitalization.sentences,
+                style: GoogleFonts.inter(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Ex: Coton, Synthétiques, Délicat…',
+                  hintStyle:
+                      GoogleFonts.inter(color: const Color(0xFF94A3B8)),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Température
+            _FieldLabel('Température'),
+            const SizedBox(height: 8),
+            _SegmentedSelector(
+              options: _temps.map((t) => t.toString()).toList(),
+              labels: _temps.map((t) => '$t°').toList(),
+              selected: _temperature.toString(),
+              onChanged: (v) =>
+                  setState(() => _temperature = int.parse(v)),
+            ),
+            const SizedBox(height: 16),
+
+            // Durée
+            Row(children: [
+              _FieldLabel('Durée : '),
+              Text(
+                '$_duration min',
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: const Color(0xFF2563EB)),
+              ),
+            ]),
+            SliderTheme(
+              data: const SliderThemeData(
+                activeTrackColor: Color(0xFF2563EB),
+                inactiveTrackColor: Color(0xFFE2E8F0),
+                thumbColor: Color(0xFF2563EB),
+              ),
+              child: Slider(
+                value: _duration.toDouble(),
+                min: 20,
+                max: 150,
+                divisions: 26,
+                onChanged: (v) =>
+                    setState(() => _duration = v.round()),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Essorage
+            _SwitchTile(
+              title: 'Essorage',
+              subtitle: "Active le cycle d'essorage",
+              value: _hasSpin,
+              onChanged: (v) => setState(() => _hasSpin = v),
+            ),
+            if (_hasSpin) ...[
+              const SizedBox(height: 12),
+              _FieldLabel("Vitesse d'essorage"),
+              const SizedBox(height: 8),
+              _SegmentedSelector(
+                options:
+                    _spinSpeeds.map((s) => s.toString()).toList(),
+                labels: _spinSpeeds.map((s) => '${s}tr').toList(),
+                selected: _spinSpeedRpm.toString(),
+                onChanged: (v) =>
+                    setState(() => _spinSpeedRpm = int.parse(v)),
+              ),
+            ],
+            const SizedBox(height: 12),
+
+            // Délicat
+            _SwitchTile(
+              title: 'Programme délicat',
+              subtitle: 'Adapté aux matières fragiles',
+              value: _isDelicate,
+              onChanged: (v) => setState(() => _isDelicate = v),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (_nameCtrl.text.trim().isEmpty) return;
+            Navigator.pop(
+              context,
+              WashProgram(
+                id: widget.existing?.id ??
+                    DateTime.now().millisecondsSinceEpoch.toString(),
+                name: _nameCtrl.text.trim(),
+                temperatureCelsius: _temperature,
+                durationMinutes: _duration,
+                hasSpin: _hasSpin,
+                spinSpeedRpm: _hasSpin ? _spinSpeedRpm : null,
+                isDelicate: _isDelicate,
+              ),
+            );
+          },
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF2563EB),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+          child: Text(isNew ? 'Ajouter' : 'Enregistrer'),
+        ),
+      ],
     );
   }
 }

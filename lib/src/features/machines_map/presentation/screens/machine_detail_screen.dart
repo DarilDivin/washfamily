@@ -1,97 +1,170 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../machines_map/domain/models/machine_model.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import '../../data/providers/machine_providers.dart';
+import '../../domain/models/machine_model.dart';
+import '../../domain/models/wash_program_model.dart';
+import '../../../laundries/data/providers/laundry_providers.dart';
+import '../../../laundries/domain/models/laundry_model.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
-class MachineDetailScreen extends StatelessWidget {
-  final MachineModel machine;
+class MachineDetailScreen extends ConsumerStatefulWidget {
+  final String laundryId;
+  final String machineId;
 
-  const MachineDetailScreen({super.key, required this.machine});
+  const MachineDetailScreen({
+    super.key,
+    required this.laundryId,
+    required this.machineId,
+  });
+
+  @override
+  ConsumerState<MachineDetailScreen> createState() =>
+      _MachineDetailScreenState();
+}
+
+class _MachineDetailScreenState extends ConsumerState<MachineDetailScreen> {
+  MachineModel? _machine;
+  bool _loading = true;
+  String? _error;
+  int _photoIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMachine();
+  }
+
+  Future<void> _loadMachine() async {
+    try {
+      final machine = await ref.read(machineRepositoryProvider).getMachine(
+            laundryId: widget.laundryId,
+            machineId: widget.machineId,
+          );
+      if (mounted) {
+        setState(() {
+          _machine = machine;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isAvailable = machine.status == 'AVAILABLE';
+    final laundryAsync = ref.watch(laundryProvider(widget.laundryId));
+
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: AppColors.scaffoldBackground,
+        body: Center(
+            child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
+
+    if (_error != null || _machine == null) {
+      return Scaffold(
+        backgroundColor: AppColors.scaffoldBackground,
+        appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const PhosphorIcon(PhosphorIconsRegular.washingMachine,
+                  size: 48, color: AppColors.textSecondary),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Machine introuvable',
+                  style: Theme.of(context).textTheme.titleMedium),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final machine = _machine!;
+    final isAvailable = machine.isAvailable;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBackground,
       body: CustomScrollView(
         slivers: [
-          // ── SliverAppBar avec image ───────────────────────────────
+          // ── SliverAppBar ────────────────────────────────────────────
           SliverAppBar(
-            expandedHeight: 280,
+            expandedHeight: 200,
             pinned: true,
-            backgroundColor: const Color(0xFF1E3A8A),
-            foregroundColor: Colors.white,
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.surface,
+            surfaceTintColor: Colors.transparent,
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Photo ou gradient
                   if (machine.photoUrls.isNotEmpty)
-                    Image.network(machine.photoUrls.first, fit: BoxFit.cover)
+                    PageView.builder(
+                      itemCount: machine.photoUrls.length,
+                      onPageChanged: (i) =>
+                          setState(() => _photoIndex = i),
+                      itemBuilder: (_, i) => Image.network(
+                        machine.photoUrls[i],
+                        fit: BoxFit.cover,
+                      ),
+                    )
                   else
                     Container(
-                      decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      child: Center(
+                        child: PhosphorIcon(
+                          PhosphorIconsRegular.washingMachine,
+                          size: 80,
+                          color: AppColors.surface.withValues(alpha: 0.25),
+                        ),
+                      ),
+                    ),
+                  if (machine.photoUrls.isNotEmpty)
+                    DecoratedBox(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.6),
+                          ],
+                          stops: const [0.4, 1.0],
                         ),
                       ),
-                      child: Stack(children: [
-                        Positioned(right: -30, top: -30, child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.06)))),
-                        Positioned(left: -20, bottom: -40, child: Container(width: 160, height: 160, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.04)))),
-                        Center(child: Icon(Icons.local_laundry_service_rounded, size: 96, color: Colors.white.withValues(alpha: 0.3))),
-                      ]),
                     ),
-                  // Dégradé sombre en bas pour lire le texte
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Color(0xCC000000)],
-                        stops: [0.5, 1.0],
-                      ),
-                    ),
-                  ),
-                  // Texte en bas de l'image
-                  Positioned(
-                    left: 20, right: 20, bottom: 20,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: isAvailable ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            isAvailable ? 'Disponible maintenant' : 'Actuellement occupée',
-                            style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          machine.brand,
-                          style: GoogleFonts.inter(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
-                        ),
-                        if (machine.address != null)
-                          Row(children: [
-                            const Icon(Icons.location_on, color: Colors.white70, size: 13),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                machine.address!,
-                                style: GoogleFonts.inter(color: Colors.white70, fontSize: 12),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                  if (machine.photoUrls.length > 1)
+                    Positioned(
+                      bottom: AppSpacing.md,
+                      right: AppSpacing.lg,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(
+                          machine.photoUrls.length,
+                          (i) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin:
+                                const EdgeInsets.symmetric(horizontal: 2),
+                            width: i == _photoIndex ? 16 : 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: i == _photoIndex
+                                  ? AppColors.surface
+                                  : AppColors.surface
+                                      .withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusFull),
                             ),
-                          ]),
-                      ],
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -100,93 +173,82 @@ class MachineDetailScreen extends StatelessWidget {
           // ── Corps ─────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Prix + Note
+                  // ── Infos machine ────────────────────────────────
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              machine.nickname.isNotEmpty
+                                  ? machine.nickname
+                                  : machine.brand,
+                              style: tt.headlineLarge,
+                            ),
+                            if (machine.model != null) ...[
+                              const SizedBox(height: AppSpacing.xs),
+                              Text(
+                                '${machine.brand} · ${machine.model}',
+                                style: tt.bodyMedium?.copyWith(
+                                    color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ],
                         ),
-                        child: Row(children: [
-                          Text(
-                            '${machine.pricePerWash.toStringAsFixed(2)} €',
-                            style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w900, color: const Color(0xFF2563EB)),
-                          ),
-                          Text(
-                            ' / lavage',
-                            style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B)),
-                          ),
-                        ]),
                       ),
-                      const Spacer(),
-                      if (machine.reviewCount > 0)
-                        Row(children: [
-                          const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 20),
-                          const SizedBox(width: 4),
-                          Text(
-                            machine.rating.toStringAsFixed(1),
-                            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
-                          ),
-                          Text(
-                            ' (${machine.reviewCount} avis)',
-                            style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF64748B)),
-                          ),
-                        ]),
+                      _AvailBadge(isAvailable: isAvailable),
                     ],
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.md),
 
-                  // Caractéristiques
-                  _SectionTitle('Caractéristiques'),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    _StatCard(icon: Icons.water_drop_outlined, value: '${machine.capacityKg} kg', label: 'Capacité'),
-                    const SizedBox(width: 12),
-                    _StatCard(
-                      icon: machine.description.contains('[Sèche-linge]')
-                          ? Icons.air_outlined
-                          : machine.description.contains('[Combiné]')
-                              ? Icons.loop_rounded
-                              : Icons.local_laundry_service_outlined,
-                      value: machine.description.contains('[Sèche-linge]')
-                          ? 'Sèche-linge'
-                          : machine.description.contains('[Combiné]')
-                              ? 'Combiné'
-                              : 'Lave-linge',
-                      label: 'Type',
-                    ),
-                    if (machine.description.contains('Lessive fournie')) ...[
-                      const SizedBox(width: 12),
-                      _StatCard(icon: Icons.soap_outlined, value: 'Fournie', label: 'Lessive'),
+                  Row(
+                    children: [
+                      const PhosphorIcon(PhosphorIconsRegular.drop,
+                          size: 16, color: AppColors.primary),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text('${machine.capacityKg} kg de capacité',
+                          style: tt.bodyMedium),
                     ],
-                  ]),
+                  ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.xl),
 
-                  // Description
-                  _SectionTitle('Description'),
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
-                    ),
-                    child: Text(
-                      machine.description
-                          .replaceAll(RegExp(r'\[.*?\]\s*'), '')
-                          .replaceAll(' — Lessive fournie.', ''),
-                      style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF374151), height: 1.6),
-                    ),
+                  // ── Programmes ───────────────────────────────────
+                  if (machine.programs.isNotEmpty) ...[
+                    _SectionTitle('Programmes disponibles'),
+                    const SizedBox(height: AppSpacing.md),
+                    ...machine.programs.map((p) => _ProgramTile(program: p)),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
+
+                  // ── Services laverie ─────────────────────────────
+                  laundryAsync.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (e, _) => const SizedBox.shrink(),
+                    data: (laundry) {
+                      if (laundry == null) return const SizedBox.shrink();
+                      final hasServices = laundry.offersFolding ||
+                          laundry.offersPickup ||
+                          laundry.offersDelivery;
+                      if (!hasServices) return const SizedBox.shrink();
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _SectionTitle('Services inclus'),
+                          const SizedBox(height: AppSpacing.md),
+                          _LaundryServicesChips(laundry: laundry),
+                          const SizedBox(height: AppSpacing.xl),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 100),
@@ -197,25 +259,55 @@ class MachineDetailScreen extends StatelessWidget {
         ],
       ),
 
-      // ── CTA Réserver ────────────────────────────────────────────
+      // ── CTA Réserver ─────────────────────────────────────────────
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
           child: FilledButton(
             onPressed: isAvailable
                 ? () => context.push('/bookings/new', extra: machine)
                 : null,
             style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              backgroundColor: const Color(0xFF2563EB),
-              disabledBackgroundColor: const Color(0xFFCBD5E1),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding:
+                  const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              backgroundColor: AppColors.primary,
+              disabledBackgroundColor: AppColors.border,
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppSpacing.radiusMd)),
             ),
             child: Text(
-              isAvailable ? 'Réserver maintenant' : 'Machine indisponible',
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16),
+              isAvailable ? 'Réserver cette machine' : 'Machine indisponible',
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AvailBadge extends StatelessWidget {
+  final bool isAvailable;
+  const _AvailBadge({required this.isAvailable});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: isAvailable ? AppColors.confirmedBg : AppColors.cancelledBg,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Text(
+        isAvailable ? 'Disponible' : 'Indisponible',
+        style: tt.labelSmall?.copyWith(
+          color: isAvailable ? AppColors.confirmedText : AppColors.cancelledText,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -227,38 +319,149 @@ class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
 
   @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
-      );
+  Widget build(BuildContext context) =>
+      Text(text, style: Theme.of(context).textTheme.titleMedium);
 }
 
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-
-  const _StatCard({required this.icon, required this.value, required this.label});
+class _ProgramTile extends StatelessWidget {
+  final WashProgram program;
+  const _ProgramTile({required this.program});
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 20, color: const Color(0xFF2563EB)),
-            const SizedBox(height: 8),
-            Text(value, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF0F172A))),
-            Text(label, style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFF64748B))),
-          ],
-        ),
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(program.name,
+              style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              _ProgramStat(
+                icon: PhosphorIconsRegular.thermometer,
+                label: '${program.temperatureCelsius}°C',
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              _ProgramStat(
+                icon: PhosphorIconsRegular.timer,
+                label: '${program.durationMinutes} min',
+              ),
+              if (program.hasSpin && program.spinSpeedRpm != null) ...[
+                const SizedBox(width: AppSpacing.lg),
+                _ProgramStat(
+                  icon: PhosphorIconsRegular.arrowsClockwise,
+                  label: '${program.spinSpeedRpm} tr/min',
+                ),
+              ],
+              if (program.isDelicate) ...[
+                const SizedBox(width: AppSpacing.lg),
+                _ProgramStat(
+                  icon: PhosphorIconsRegular.leaf,
+                  label: 'Délicat',
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgramStat extends StatelessWidget {
+  final PhosphorIconData icon;
+  final String label;
+  const _ProgramStat({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PhosphorIcon(icon, size: 14, color: AppColors.textSecondary),
+        const SizedBox(width: AppSpacing.xs),
+        Text(label,
+            style:
+                tt.labelSmall?.copyWith(color: AppColors.textSecondary)),
+      ],
+    );
+  }
+}
+
+class _LaundryServicesChips extends StatelessWidget {
+  final LaundryModel laundry;
+  const _LaundryServicesChips({required this.laundry});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        if (laundry.offersFolding)
+          _Chip(icon: PhosphorIconsRegular.sparkle, label: 'Pliage inclus'),
+        if (laundry.offersPickup)
+          _Chip(
+              icon: PhosphorIconsRegular.arrowsClockwise,
+              label: 'Collecte disponible'),
+        if (laundry.offersDelivery)
+          _Chip(
+              icon: PhosphorIconsRegular.navigationArrow,
+              label: 'Livraison disponible'),
+        if (laundry.hasDelivery)
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md, vertical: AppSpacing.sm - 2),
+            decoration: BoxDecoration(
+              color: AppColors.inputBackground,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+            ),
+            child: Text(
+              '${laundry.deliveryFee!.toStringAsFixed(2)} € · ${laundry.deliveryZoneKm} km',
+              style:
+                  tt.labelSmall?.copyWith(color: AppColors.textSecondary),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final PhosphorIconData icon;
+  final String label;
+  const _Chip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm - 2),
+      decoration: BoxDecoration(
+        color: AppColors.confirmedBg,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusFull),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PhosphorIcon(icon, size: 13, color: AppColors.confirmedText),
+          const SizedBox(width: AppSpacing.xs),
+          Text(label,
+              style: tt.labelSmall?.copyWith(
+                  color: AppColors.confirmedText,
+                  fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

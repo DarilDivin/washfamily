@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:washfamily/src/features/machines_map/domain/models/machine_model.dart';
 import 'package:washfamily/src/features/machines_map/data/repositories/firestore_machine_repository.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 
 class MyMachinesScreen extends StatefulWidget {
   const MyMachinesScreen({super.key});
@@ -43,26 +45,25 @@ class _MyMachinesScreenState extends State<MyMachinesScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Supprimer cette machine ?',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusXl)),
+        title: Text('Supprimer cette machine ?'),
         content: Text(
-          'La machine "${machine.brand}" sera retirée définitivement.',
-          style: GoogleFonts.inter(color: const Color(0xFF64748B), fontSize: 14),
-        ),
+            'La machine "${machine.brand}" sera retirée définitivement.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Annuler',
-                style: GoogleFonts.inter(color: const Color(0xFF64748B), fontWeight: FontWeight.w600)),
+            child: const Text('Annuler'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFDC2626),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppSpacing.radiusMd)),
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('Supprimer', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+            child: const Text('Supprimer'),
           ),
         ],
       ),
@@ -76,59 +77,66 @@ class _MyMachinesScreenState extends State<MyMachinesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        title: Text('Mes machines',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 22)),
-        backgroundColor: Colors.white,
+        title: Text('Mes machines', style: tt.titleLarge),
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        foregroundColor: const Color(0xFF0F172A),
+        foregroundColor: AppColors.textPrimary,
         surfaceTintColor: Colors.transparent,
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/profile/add-machine').then((_) => _loadMachines()),
-        backgroundColor: const Color(0xFF2563EB),
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        onPressed: () =>
+            context.push('/profile/add-machine').then((_) => _loadMachines()),
+        elevation: 0,
+        backgroundColor: AppColors.primary,
+        icon: const PhosphorIcon(PhosphorIconsRegular.plus,
+            color: AppColors.surface, size: 20),
         label: Text('Ajouter',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white)),
+            style: tt.labelLarge?.copyWith(color: AppColors.surface)),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
           : _machines.isEmpty
-              ? _buildEmptyState()
+              ? _buildEmptyState(tt)
               : _buildMachinesList(),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(TextTheme tt) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(40.0),
+        padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: Color(0xFFEFF6FF),
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              decoration: BoxDecoration(
+                color: AppColors.completedBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.local_laundry_service_outlined,
-                  size: 56, color: Color(0xFF2563EB)),
+              child: const PhosphorIcon(
+                PhosphorIconsRegular.washingMachine,
+                size: 48,
+                color: AppColors.primary,
+              ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xl),
             Text(
               'Aucune machine enregistrée',
               textAlign: TextAlign.center,
-              style: GoogleFonts.outfit(
-                  fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
+              style: tt.titleLarge,
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               'Ajoutez votre première machine pour générer des revenus avec WashFamily.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF64748B), height: 1.6),
+              style: tt.bodySmall,
             ),
           ],
         ),
@@ -138,9 +146,11 @@ class _MyMachinesScreenState extends State<MyMachinesScreen> {
 
   Widget _buildMachinesList() {
     return RefreshIndicator(
+      color: AppColors.primary,
       onRefresh: _loadMachines,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 100),
         itemCount: _machines.length,
         itemBuilder: (context, index) {
           final machine = _machines[index];
@@ -157,9 +167,9 @@ class _MyMachinesScreenState extends State<MyMachinesScreen> {
   }
 }
 
-// ─────────────────────────────────────────────
-// Card — suit le design system de BookingsScreen
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// _MachineCard
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _MachineCard extends StatelessWidget {
   final MachineModel machine;
@@ -172,84 +182,104 @@ class _MachineCard extends StatelessWidget {
     required this.onEdit,
   });
 
-  (String label, Color color, Color bg, IconData icon) get _status => switch (machine.status) {
-        'AVAILABLE'   => ('Disponible', const Color(0xFF16A34A), const Color(0xFFDCFCE7), Icons.check_circle_rounded),
-        'IN_USE'      => ('En service', const Color(0xFFD97706), const Color(0xFFFFF3CD), Icons.access_time_rounded),
-        'MAINTENANCE' => ('Maintenance', const Color(0xFF64748B), const Color(0xFFF1F5F9), Icons.build_outlined),
-        _             => ('Inconnu',     const Color(0xFF94A3B8), const Color(0xFFF8FAFC), Icons.help_outline_rounded),
+  (String label, Color color, Color bg, PhosphorIconData icon) get _status =>
+      switch (machine.status) {
+        'AVAILABLE' => (
+            'Disponible',
+            AppColors.confirmedText,
+            AppColors.confirmedBg,
+            PhosphorIconsFill.checkCircle,
+          ),
+        'IN_USE' => (
+            'En service',
+            AppColors.pendingText,
+            AppColors.pendingBg,
+            PhosphorIconsRegular.clock,
+          ),
+        'MAINTENANCE' => (
+            'Maintenance',
+            AppColors.textSecondary,
+            AppColors.inputBackground,
+            PhosphorIconsRegular.wrench,
+          ),
+        _ => (
+            'Inconnu',
+            AppColors.textSecondary,
+            AppColors.inputBackground,
+            PhosphorIconsRegular.question,
+          ),
       };
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final (statusLabel, statusColor, statusBg, statusIcon) = _status;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── En-tête : icône + marque + badge statut ──
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(10),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: AppColors.completedBg,
+                    borderRadius:
+                        BorderRadius.circular(AppSpacing.radiusMd),
+                  ),
+                  child: const PhosphorIcon(
+                    PhosphorIconsRegular.washingMachine,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Marque',
+                          style: tt.labelSmall?.copyWith(
+                              fontSize: 10,
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.5)),
+                      Text(
+                        machine.brand.toUpperCase(),
+                        style: tt.titleSmall
+                            ?.copyWith(color: AppColors.textPrimary),
                       ),
-                      child: const Icon(Icons.local_laundry_service_rounded,
-                          color: Color(0xFF2563EB), size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Marque',
-                            style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: const Color(0xFF94A3B8),
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5)),
-                        Text(machine.brand.toUpperCase(),
-                            style: GoogleFonts.outfit(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
-                                color: const Color(0xFF0F172A))),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 // Badge statut
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration:
-                      BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm + AppSpacing.xs,
+                      vertical: AppSpacing.xs),
+                  decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius:
+                          BorderRadius.circular(AppSpacing.radiusFull)),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(statusIcon, color: statusColor, size: 14),
-                      const SizedBox(width: 4),
+                      PhosphorIcon(statusIcon,
+                          color: statusColor, size: 13),
+                      const SizedBox(width: AppSpacing.xs),
                       Text(statusLabel,
-                          style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 11,
+                          style: tt.labelSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
                               color: statusColor)),
                     ],
                   ),
@@ -258,11 +288,11 @@ class _MachineCard extends StatelessWidget {
             ),
           ),
 
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          Divider(height: 1, color: AppColors.border),
 
           // ── Infos : capacité, adresse, prix ──
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
                 Expanded(
@@ -270,70 +300,75 @@ class _MachineCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _InfoRow(
-                        icon: Icons.water_drop_outlined,
+                        icon: PhosphorIconsRegular.drop,
                         text: '${machine.capacityKg} kg • ${machine.brand}',
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: AppSpacing.sm),
                       _InfoRow(
-                        icon: Icons.location_on_outlined,
+                        icon: PhosphorIconsRegular.mapPin,
                         text: machine.address ?? 'Adresse non définie',
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: AppSpacing.md),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
                       '${machine.pricePerWash.toStringAsFixed(2)} €',
-                      style: GoogleFonts.outfit(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF2563EB)),
+                      style: tt.titleLarge
+                          ?.copyWith(color: AppColors.primary),
                     ),
-                    Text('/ heure',
-                        style: GoogleFonts.inter(
-                            fontSize: 11, color: const Color(0xFF94A3B8))),
+                    Text('/ lavage',
+                        style: tt.bodySmall),
                   ],
                 ),
               ],
             ),
           ),
 
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          Divider(height: 1, color: AppColors.border),
 
           // ── Actions ──
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md, vertical: AppSpacing.sm),
             child: Row(
               children: [
                 Expanded(
-                  child: TextButton.icon(
+                  child: OutlinedButton.icon(
                     onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: Text('Modifier',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13)),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF2563EB),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    icon: const PhosphorIcon(
+                        PhosphorIconsRegular.pencilSimple,
+                        size: 15),
+                    label: const Text('Modifier'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      padding:
+                          const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: const BorderSide(color: Color(0xFFBFDBFE))),
+                          borderRadius:
+                              BorderRadius.circular(AppSpacing.radiusMd)),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                TextButton.icon(
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton.icon(
                   onPressed: onDelete,
-                  icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                  label: Text('Supprimer',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13)),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFDC2626),
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                  icon: const PhosphorIcon(PhosphorIconsRegular.trash,
+                      size: 15),
+                  label: const Text('Supprimer'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: const BorderSide(color: AppColors.error),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.sm,
+                        horizontal: AppSpacing.md),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: Color(0xFFFECACA))),
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusMd)),
                   ),
                 ),
               ],
@@ -346,22 +381,23 @@ class _MachineCard extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  final IconData icon;
+  final PhosphorIconData icon;
   final String text;
   const _InfoRow({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 14, color: const Color(0xFF94A3B8)),
-        const SizedBox(width: 6),
+        PhosphorIcon(icon, size: 13, color: AppColors.textSecondary),
+        const SizedBox(width: AppSpacing.xs),
         Expanded(
           child: Text(
             text,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B)),
+            style: tt.bodySmall,
           ),
         ),
       ],
